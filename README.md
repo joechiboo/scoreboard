@@ -66,6 +66,10 @@ scoreboard/
 - [ ] 全自動三分判定
 - [ ] 比賽紀錄與統計
 
+## 使用
+
+計分板網址：https://joechiboo.github.io/scoreboard/
+
 ## 開發
 
 ```bash
