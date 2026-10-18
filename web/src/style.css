@@ -48,7 +48,10 @@ html, body {
   padding: 16px 12px;
   border-top: 6px solid var(--accent);
   min-height: 0;
+  cursor: pointer;
+  touch-action: none; /* 讓上下滑不會捲動頁面 */
 }
+.team:active { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
 .team-a { --accent: var(--a); }
 .team-b { --accent: var(--b); }
 
@@ -71,12 +74,6 @@ html, body {
   100% { transform: scale(1); }
 }
 
-.buttons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  width: 100%;
-}
 
 button {
   font: inherit;
@@ -91,8 +88,11 @@ button {
   touch-action: manipulation;
 }
 button:active { background: var(--btn-active); transform: scale(0.96); }
-.buttons button:not(.minus) { background: color-mix(in srgb, var(--accent) 30%, var(--btn)); }
-.minus { color: var(--muted); }
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+}
 
 .bar {
   display: flex;
@@ -129,5 +129,4 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
   .board { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   .score { font-size: clamp(5rem, 30vw, 12rem); }
   .name { font-size: 1.4rem; }
-  .buttons button { font-size: 1.3rem; }
 }

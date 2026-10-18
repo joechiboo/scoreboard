@@ -9,12 +9,7 @@ app.innerHTML = `
       <section class="team team-${team.toLowerCase()}" data-team="${team}">
         <h2 class="name" data-name>—</h2>
         <div class="score" data-score>0</div>
-        <div class="buttons">
-          <button data-points="1">+1</button>
-          <button data-points="2">+2</button>
-          <button data-points="3">+3</button>
-          <button data-points="-1" class="minus">−1</button>
-        </div>
+        <p class="hint">點一下 / 上滑 +1　下滑 −1</p>
       </section>
     `).join('')}
   </main>
@@ -34,10 +29,21 @@ let unsubscribe = null
 let reqSeq = 0
 let renderedReq = 0
 
+// 畫面比分 = 伺服器比分 + 自己尚未確認的加減分（樂觀更新）
+const server = { A: 0, B: 0 }
+const pending = { A: 0, B: 0 }
+
 function renderScore({ score_a, score_b }) {
-  for (const [team, value] of [['A', score_a], ['B', score_b]]) {
+  server.A = score_a
+  server.B = score_b
+  paint()
+}
+
+function paint() {
+  for (const team of ['A', 'B']) {
+    const value = String(server[team] + pending[team])
     const el = $('[data-score]', teamEl(team))
-    if (el.textContent !== String(value)) {
+    if (el.textContent !== value) {
       el.textContent = value
       el.classList.remove('bump')
       void el.offsetWidth // 重新觸發動畫
@@ -105,14 +111,47 @@ async function run(action) {
   }
 }
 
+// 隊伍區塊手勢：點一下或上滑 +1，下滑 −1
+const SWIPE_PX = 40
+
+async function score(team, points) {
+  if (!game) return
+  if (server[team] + pending[team] + points < 0) return
+  pending[team] += points
+  paint()
+  try {
+    await addScore(game.id, team, points)
+    await refresh() // 回來時伺服器比分已包含這筆
+  } catch (err) {
+    console.error(err)
+    toast('操作失敗，請檢查網路')
+  } finally {
+    pending[team] -= points
+    paint()
+  }
+}
+
+for (const el of app.querySelectorAll('[data-team]')) {
+  let startY = null
+  el.addEventListener('pointerdown', (e) => {
+    startY = e.clientY
+    el.setPointerCapture(e.pointerId)
+  })
+  el.addEventListener('pointerup', (e) => {
+    if (startY === null) return
+    const dy = e.clientY - startY
+    startY = null
+    if (dy > SWIPE_PX) score(el.dataset.team, -1)
+    else if (dy < -SWIPE_PX || Math.abs(dy) < 10) score(el.dataset.team, 1)
+  })
+  el.addEventListener('pointercancel', () => (startY = null))
+}
+
 app.addEventListener('click', async (e) => {
   const btn = e.target.closest('button')
   if (!btn) return
 
-  if (btn.dataset.points) {
-    const team = btn.closest('[data-team]').dataset.team
-    run(() => addScore(game.id, team, Number(btn.dataset.points)))
-  } else if (btn.dataset.action === 'undo') {
+  if (btn.dataset.action === 'undo') {
     run(async () => {
       const undone = await undoLast(game.id)
       toast(undone ? `已撤銷 ${undone.team === 'A' ? game.team_a_name : game.team_b_name} ${undone.points > 0 ? '+' : ''}${undone.points}` : '沒有可撤銷的紀錄')
