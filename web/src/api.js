@@ -39,26 +39,32 @@ export async function newGame(teamAName = '主隊', teamBName = '客隊') {
 }
 
 // 訂閱比分與比賽變化。
-// onScore(score)：比分變動（含剛連上／重連時的同步）
+// onChange()：比分可能變動，需重新抓取（含剛連上／重連時）
 // onGameChange(game)：目前比賽被結束或開了新局
+// onStatus(online)：連線狀態
 // 回傳取消訂閱的函式
-export function subscribe(gameId, { onScore, onGameChange }) {
-  const refreshScore = async () => onScore(await getScore(gameId))
-
+export function subscribe(gameId, { onChange, onGameChange, onStatus = () => {} }) {
   const channel = supabase
     .channel(`game:${gameId}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'score_events', filter: `game_id=eq.${gameId}` },
-      refreshScore,
+      () => onChange(),
     )
     .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, async () => {
       const game = await getCurrentGame()
       if (game?.id !== gameId) onGameChange(game)
     })
+    // 伺服器確認開始推送 postgres_changes 後才算連上；
+    // 首次連上與斷線重連都重新抓一次，避免漏掉事件
+    .on('system', {}, (payload) => {
+      if (payload.extension === 'postgres_changes' && payload.status === 'ok') {
+        onStatus(true)
+        onChange()
+      }
+    })
     .subscribe((status) => {
-      // 首次連上與斷線重連都重新抓一次，避免漏掉事件
-      if (status === 'SUBSCRIBED') refreshScore()
+      if (status !== 'SUBSCRIBED') onStatus(false)
     })
 
   return () => supabase.removeChannel(channel)

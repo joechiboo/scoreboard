@@ -41,12 +41,12 @@ scoreboard/
 ## 開發階段
 
 ### Phase 1：Web 手動計分板 + Supabase 同步
-- [ ] Supabase schema（games、score_events）與 RLS
-- [ ] 單一共用比賽（暫不做房間，所有裝置看同一場）
-- [ ] 開新局／重置比分
-- [ ] 加減分
-- [ ] 撤銷
-- [ ] Realtime 多裝置同步
+- [x] Supabase schema（games、score_events）與 RLS
+- [x] 單一共用比賽（暫不做房間，所有裝置看同一場）
+- [x] 開新局／重置比分
+- [x] 加減分
+- [x] 撤銷
+- [x] Realtime 多裝置同步
 - [ ] 部署到 GitHub Pages
 
 ### Phase 2：辨識 POC

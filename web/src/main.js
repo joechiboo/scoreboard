@@ -1,60 +1,134 @@
 import './style.css'
-import heroImg from './assets/hero.png'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import { setupCounter } from './counter.js'
+import { getCurrentGame, getScore, addScore, undoLast, newGame, subscribe } from './api.js'
 
-document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const app = document.querySelector('#app')
 
-<div class="ticks"></div>
-
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
-
-<div class="ticks"></div>
-<section id="spacer"></section>
+app.innerHTML = `
+  <main class="board">
+    ${['A', 'B'].map((team) => `
+      <section class="team team-${team.toLowerCase()}" data-team="${team}">
+        <h2 class="name" data-name>—</h2>
+        <div class="score" data-score>0</div>
+        <div class="buttons">
+          <button data-points="1">+1</button>
+          <button data-points="2">+2</button>
+          <button data-points="3">+3</button>
+          <button data-points="-1" class="minus">−1</button>
+        </div>
+      </section>
+    `).join('')}
+  </main>
+  <footer class="bar">
+    <span class="status" data-status title="連線狀態"></span>
+    <button data-action="undo">↶ 撤銷</button>
+    <button data-action="new">開新局</button>
+  </footer>
+  <div class="toast" data-toast hidden></div>
 `
 
-setupCounter(document.querySelector('#counter'))
+const $ = (sel, root = app) => root.querySelector(sel)
+const teamEl = (team) => $(`[data-team="${team}"]`)
+
+let game = null
+let unsubscribe = null
+let reqSeq = 0
+let renderedReq = 0
+
+function renderScore({ score_a, score_b }) {
+  for (const [team, value] of [['A', score_a], ['B', score_b]]) {
+    const el = $('[data-score]', teamEl(team))
+    if (el.textContent !== String(value)) {
+      el.textContent = value
+      el.classList.remove('bump')
+      void el.offsetWidth // 重新觸發動畫
+      el.classList.add('bump')
+    }
+  }
+}
+
+function renderStatus(online) {
+  $('[data-status]').classList.toggle('online', online)
+}
+
+let toastTimer
+function toast(msg) {
+  const el = $('[data-toast]')
+  el.textContent = msg
+  el.hidden = false
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (el.hidden = true), 2000)
+}
+
+// 重新抓比分；請求可能亂序回來，較早發出的結果不可蓋掉較新的結果
+async function refresh() {
+  if (!game) return
+  const req = ++reqSeq
+  const gameId = game.id
+  const score = await getScore(gameId)
+  if (req > renderedReq && gameId === game?.id) {
+    renderedReq = req
+    renderScore(score)
+  }
+}
+
+async function loadGame(g) {
+  if (g && g.id === game?.id) return // 同一個變化可能通知多次
+  unsubscribe?.()
+  unsubscribe = null
+  game = g
+  if (!game) {
+    toast('目前沒有進行中的比賽')
+    return
+  }
+  $('[data-name]', teamEl('A')).textContent = game.team_a_name
+  $('[data-name]', teamEl('B')).textContent = game.team_b_name
+  await refresh()
+  unsubscribe = subscribe(game.id, {
+    onChange: refresh,
+    onGameChange: (g) => {
+      if (g?.id !== game?.id) toast('已開新局')
+      loadGame(g)
+    },
+    onStatus: renderStatus,
+  })
+}
+
+// 操作後立即更新自己畫面，不等 Realtime 回傳
+async function run(action) {
+  if (!game) return
+  try {
+    await action()
+    await refresh()
+  } catch (err) {
+    console.error(err)
+    toast('操作失敗，請檢查網路')
+  }
+}
+
+app.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button')
+  if (!btn) return
+
+  if (btn.dataset.points) {
+    const team = btn.closest('[data-team]').dataset.team
+    run(() => addScore(game.id, team, Number(btn.dataset.points)))
+  } else if (btn.dataset.action === 'undo') {
+    run(async () => {
+      const undone = await undoLast(game.id)
+      toast(undone ? `已撤銷 ${undone.team === 'A' ? game.team_a_name : game.team_b_name} ${undone.points > 0 ? '+' : ''}${undone.points}` : '沒有可撤銷的紀錄')
+    })
+  } else if (btn.dataset.action === 'new') {
+    if (!confirm('確定要開新局？目前比分會歸零。')) return
+    try {
+      await loadGame(await newGame(game?.team_a_name, game?.team_b_name))
+    } catch (err) {
+      console.error(err)
+      toast('開新局失敗')
+    }
+  }
+})
+
+loadGame(await getCurrentGame()).catch((err) => {
+  console.error(err)
+  toast('無法連線到伺服器')
+})
