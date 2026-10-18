@@ -9,7 +9,6 @@ app.innerHTML = `
       <section class="team team-${team.toLowerCase()}" data-team="${team}">
         <h2 class="name" data-name>—</h2>
         <div class="score" data-score>0</div>
-        <p class="hint">點一下 / 上滑 +1　下滑 −1</p>
       </section>
     `).join('')}
   </main>
@@ -17,7 +16,20 @@ app.innerHTML = `
     <span class="status" data-status title="連線狀態"></span>
     <button data-action="undo">↶ 撤銷</button>
     <button data-action="new">開新局</button>
+    <button data-action="help" class="help" aria-label="操作說明">?</button>
   </footer>
+  <dialog class="modal" data-help>
+    <h2>操作方式</h2>
+    <ul>
+      <li><b>點一下</b>比分：+1</li>
+      <li><b>往上滑</b>：+1</li>
+      <li><b>往下滑</b>：−1（最低 0）</li>
+      <li><b>撤銷</b>：取消最後一筆加減分</li>
+      <li><b>開新局</b>：比分歸零，所有裝置一起切換</li>
+      <li>左下角燈號：<span class="dot online"></span>已連線　<span class="dot"></span>未連線</li>
+    </ul>
+    <form method="dialog"><button>知道了</button></form>
+  </dialog>
   <div class="toast" data-toast hidden></div>
 `
 
@@ -156,6 +168,8 @@ app.addEventListener('click', async (e) => {
       const undone = await undoLast(game.id)
       toast(undone ? `已撤銷 ${undone.team === 'A' ? game.team_a_name : game.team_b_name} ${undone.points > 0 ? '+' : ''}${undone.points}` : '沒有可撤銷的紀錄')
     })
+  } else if (btn.dataset.action === 'help') {
+    $('[data-help]').showModal()
   } else if (btn.dataset.action === 'new') {
     if (!confirm('確定要開新局？目前比分會歸零。')) return
     try {
@@ -165,6 +179,11 @@ app.addEventListener('click', async (e) => {
       toast('開新局失敗')
     }
   }
+})
+
+// 點 modal 外面關閉
+$('[data-help]').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close()
 })
 
 loadGame(await getCurrentGame()).catch((err) => {
