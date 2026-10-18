@@ -4,11 +4,12 @@
   python scripts/eval_video.py clip.mp4                       # 跳出視窗框選籃框
   python scripts/eval_video.py clip.mp4 --rim 812,402,955,430 --labels clip.csv --out clip_debug.mp4
 
-labels CSV：每行一個進球時間，秒數（12.5）或 分:秒（1:02.5），# 開頭為註解。
+labels CSV：每行一顆球「時間,結果,分數」，例如 1:02.5,進,3 或 0:48,沒進。
+時間可寫秒數（12.5）或 分:秒（1:02.5）；只有時間沒有結果的行視為進球；# 開頭為註解。
+詳見 docs/recording-guide.md。
 """
 
 import argparse
-import csv
 import sys
 from pathlib import Path
 
@@ -18,25 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scoreboard_ml import Box, GoalConfig, GoalDetector, detection_roi, net_region  # noqa: E402
 from scoreboard_ml.ball_detector import YoloBallDetector  # noqa: E402
+from scoreboard_ml.labels import load_labels  # noqa: E402
 from scoreboard_ml.net_motion import NetMotion  # noqa: E402
-
-
-def parse_time(s: str) -> float:
-    parts = s.strip().split(":")
-    return sum(float(p) * 60**i for i, p in enumerate(reversed(parts)))
-
-
-def load_labels(path: Path) -> list[float]:
-    times = []
-    with path.open(encoding="utf-8") as f:
-        for row in csv.reader(f):
-            if not row or not row[0].strip() or row[0].lstrip().startswith("#"):
-                continue
-            try:
-                times.append(parse_time(row[0]))
-            except ValueError:
-                continue  # 標題列
-    return sorted(times)
 
 
 def select_rim(frame) -> Box:

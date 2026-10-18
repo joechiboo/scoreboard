@@ -20,11 +20,11 @@ python scripts/eval_video.py clip.mp4
 python scripts/eval_video.py clip.mp4 --rim 812,402,955,430 --labels clip.csv --out clip_debug.mp4
 ```
 
-`clip.csv`：每行一個進球時間，秒數（`12.5`）或分:秒（`1:02.5`），`#` 開頭為註解。
+`clip.csv`：每行一顆球「時間,結果,分數」，例如 `1:02.5,進,3`、`0:48,沒進`，格式見[錄影指南](../docs/recording-guide.md#標記格式)。
 
 比較各項檢查的效果：`--no-size`（關閉球框大小比例）、`--no-net`（關閉籃網晃動確認）、`--net-threshold 0.03`。
 
-## 判定邏輯（`scoreboard_ml/goal_detector.py`）
+## 判定邏輯（`scoreboard_ml/goal_detector.py`，詳見 [docs/goal-detection.md](../docs/goal-detection.md)）
 
 1. **軌跡**：球先在框上方，0.7 秒內出現在框下方，且兩點連線穿過框內（球太快、中間幀沒拍到也能判定）
 2. **大小**：穿越時球徑 / 框寬 ≈ 0.53（籃球 24cm / 籃框 45cm），排除從框前（看起來大）或框後（看起來小）掉下的麵包球
