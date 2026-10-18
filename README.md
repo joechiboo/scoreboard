@@ -47,7 +47,7 @@ scoreboard/
 - [x] 加減分
 - [x] 撤銷
 - [x] Realtime 多裝置同步
-- [ ] 部署到 GitHub Pages
+- [x] 部署到 GitHub Pages
 
 ### Phase 2：辨識 POC
 - [ ] 錄影建立測試素材
