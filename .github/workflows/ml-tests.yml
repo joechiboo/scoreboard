@@ -1,0 +1,23 @@
+name: ml tests
+
+on:
+  push:
+    paths:
+      - 'ml/**'
+      - '.github/workflows/ml-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # 判定邏輯的測試不需要 YOLO，只裝輕量依賴
+      - run: pip install numpy opencv-python-headless pytest
+      - run: pytest -q tests
