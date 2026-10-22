@@ -160,6 +160,25 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .games .time { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.4; margin-top: 4px; }
 .modal .note { margin: 10px 0 0; font-size: 0.85rem; }
 
+/* 編輯一場 */
+.games li { cursor: pointer; border-radius: 8px; padding: 2px 6px; margin-left: -6px; }
+.games li:hover, .games li:active { background: var(--btn); }
+.field .score-input { flex: none; width: 4.2em; text-align: center; font-variant-numeric: tabular-nums; }
+.modal .danger { background: color-mix(in srgb, #e5484d 22%, var(--btn)); color: #ff8a8d; }
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--btn);
+  font-size: 0.9rem;
+}
+.undo-bar[hidden] { display: none; }
+.undo-bar span { flex: 1; min-width: 0; }
+.modal .undo-bar button { flex: none; padding: 0.35em 1em; font-size: 0.95rem; background: var(--b); color: #fff; }
+
 .status, .dot {
   display: inline-block;
   width: 12px;
@@ -191,6 +210,8 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
   font-size: 1rem;
 }
 .toast[hidden] { display: none; }
+/* popover 的瀏覽器預設樣式（置中、邊框、白底）蓋掉，維持原本的提示外觀 */
+.toast[popover] { right: auto; bottom: auto; margin: 0; border: 0; color: var(--text); overflow: visible; }
 
 /* 直立手機：上下排列 */
 @media (orientation: portrait) and (max-width: 700px) {

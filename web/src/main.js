@@ -1,6 +1,7 @@
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
+  setScore, deleteGame, restoreEvents,
 } from './api.js'
 import {
   groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished, newestFirst,
@@ -67,6 +68,10 @@ app.innerHTML = `
       <button type="button" data-day="1" aria-label="較新">›</button>
     </header>
     <div data-history-body></div>
+    <p class="undo-bar" data-undo-bar hidden>
+      <span data-undo-text></span>
+      <button type="button" data-restore>復原</button>
+    </p>
     <div class="actions">
       <button type="button" data-share-line class="primary">分享到 LINE</button>
       <button type="button" data-copy>複製文字</button>
@@ -75,7 +80,27 @@ app.innerHTML = `
       <button type="button" data-close>關閉</button>
     </div>
   </dialog>
-  <div class="toast" data-toast hidden></div>
+  <dialog class="modal" data-edit>
+    <form data-edit-form>
+      <h2 data-edit-title>編輯</h2>
+      <p class="hint" data-edit-hint></p>
+      ${['A', 'B'].map((team) => `
+        <div class="field team-${team.toLowerCase()}">
+          <span>${team === 'A' ? '左／上' : '右／下'}</span>
+          <input name="name${team}" maxlength="12" autocomplete="off" required aria-label="隊名">
+          <input name="score${team}" class="score-input" type="number" inputmode="numeric" min="0" max="200" step="1" required aria-label="比分">
+        </div>
+      `).join('')}
+      <div class="actions">
+        <button type="button" data-close>取消</button>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+      <div class="actions">
+        <button type="button" class="danger" data-delete>刪除這場</button>
+      </div>
+    </form>
+  </dialog>
+  <div class="toast" data-toast popover="manual" hidden></div>
 `
 
 const $ = (sel, root = app) => root.querySelector(sel)
@@ -118,13 +143,25 @@ function renderStatus(online) {
   $('[data-status]').classList.toggle('online', online)
 }
 
+// 提示用 popover 放進 top layer，開著對話框時才不會被蓋住；不支援 popover 的瀏覽器退回 hidden
+const toastEl = $('[data-toast]')
+const canPopover = typeof toastEl.showPopover === 'function'
+if (canPopover) toastEl.hidden = false
+
+function showToastEl(show) {
+  if (!canPopover) return void (toastEl.hidden = !show)
+  try {
+    if (toastEl.matches(':popover-open')) toastEl.hidePopover()
+    if (show) toastEl.showPopover() // 每次重新顯示，才會排在最新打開的對話框上面
+  } catch { /* 狀態不對時忽略 */ }
+}
+
 let toastTimer
 function toast(msg) {
-  const el = $('[data-toast]')
-  el.textContent = msg
-  el.hidden = false
+  toastEl.textContent = msg
+  showToastEl(true)
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (el.hidden = true), 2000)
+  toastTimer = setTimeout(() => showToastEl(false), 2000)
 }
 
 // 重新抓比分；請求可能亂序回來，較早發出的結果不可蓋掉較新的結果
@@ -339,18 +376,36 @@ function renderHistory() {
     h('td', { textContent: t.pointsAgainst }),
   ]))
   const table = h('table', { className: 'standings' }, [h('thead', {}, [head]), h('tbody', {}, rows)])
-  const list = h('ol', { className: 'games' }, newestFirst(day.games).map(({ game: g, no }) => h('li', { value: no }, [
-    h('span', { className: 'time', textContent: gameTime(g) }),
-    gameLine(g),
-  ])))
+  const list = h('ol', { className: 'games' }, newestFirst(day.games).map(({ game: g, no }) => {
+    const li = h('li', { value: no, title: '點一下編輯或刪除' }, [
+      h('span', { className: 'time', textContent: gameTime(g) }),
+      gameLine(g),
+    ])
+    li.dataset.gameId = g.id
+    li.dataset.no = no
+    return li
+  }))
   const hasLive = day.games.some((g) => !isFinished(g))
-  const note = hasLive ? h('p', { className: 'hint note', textContent: '進行中的那場要按「開新局」結束後才算進戰績' }) : ''
-  body.replaceChildren(...(standings(day.games).length ? [table] : []), list, note)
+  const notes = [
+    hasLive ? '進行中的那場要按「開新局」結束後才算進戰績' : null,
+    '點一場可以改隊名、比分或刪除',
+  ].filter(Boolean).map((t) => h('p', { className: 'hint note', textContent: t }))
+  body.replaceChildren(...(standings(day.games).length ? [table] : []), list, ...notes)
+}
+
+// 重新抓紀錄，盡量停在原本那一天（那天的場次全刪光了就停在相鄰的日期）
+async function reloadHistory() {
+  const key = days[dayIdx]?.key
+  days = groupByDay(await listGames())
+  const idx = days.findIndex((d) => d.key === key)
+  dayIdx = idx >= 0 ? idx : Math.min(dayIdx, Math.max(days.length - 1, 0))
+  renderHistory()
 }
 
 async function openHistory() {
   days = []
   dayIdx = 0
+  hideUndo()
   renderHistory()
   $('[data-day-label]', histDlg).textContent = '載入中…'
   histDlg.showModal()
@@ -364,9 +419,12 @@ async function openHistory() {
 }
 
 histDlg.addEventListener('click', async (e) => {
+  const li = e.target.closest('[data-game-id]')
+  if (li) return openEdit(li.dataset.gameId, li.dataset.no)
   const btn = e.target.closest('button')
   if (!btn) return
   const day = days[dayIdx]
+  if ('restore' in btn.dataset) return restoreDeleted()
   if (btn.dataset.day) {
     // ‹ 往較早的日期（陣列後面），› 往較新的日期
     dayIdx = Math.min(Math.max(dayIdx - Number(btn.dataset.day), 0), Math.max(days.length - 1, 0))
@@ -393,6 +451,92 @@ async function copyText(text, msg) {
     toast(msg)
   } catch {
     toast('無法複製')
+  }
+}
+
+// ---------- 編輯、刪除一場 ----------
+
+const editDlg = $('[data-edit]')
+const editForm = $('[data-edit-form]')
+let editing = null // 正在編輯的那場
+let lastDeleted = null // { ids, label }：最近一次刪除，給「復原」用
+
+function openEdit(gameId, no) {
+  const g = days[dayIdx]?.games.find((x) => x.id === gameId)
+  if (!g) return
+  editing = g
+  $('[data-edit-title]', editDlg).textContent = `第 ${no} 場`
+  $('[data-edit-hint]', editDlg).textContent =
+    `開打 ${gameTime(g)}${g.status === 'live' ? '，還在進行中' : ''}。改比分會補一筆加減分，原本的紀錄不動。`
+  editForm.elements.nameA.value = g.team_a_name
+  editForm.elements.nameB.value = g.team_b_name
+  editForm.elements.scoreA.value = g.score_a
+  editForm.elements.scoreB.value = g.score_b
+  editDlg.showModal()
+}
+
+editForm.addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const g = editing
+  if (!g) return
+  const a = cleanName(editForm.elements.nameA.value)
+  const b = cleanName(editForm.elements.nameB.value)
+  const sa = Number(editForm.elements.scoreA.value)
+  const sb = Number(editForm.elements.scoreB.value)
+  if (!a || !b) return
+  if (a === b) return toast('兩隊隊名不能一樣')
+  if (![sa, sb].every((n) => Number.isInteger(n) && n >= 0 && n <= 200)) return toast('比分要是 0～200 的整數')
+  if (sa + sb === 0) return toast('比分 0:0 會從紀錄消失，要刪除請按「刪除這場」')
+  try {
+    if (a !== g.team_a_name || b !== g.team_b_name) await renameTeams(g.id, a, b)
+    await setScore(g.id, sa, sb)
+    editDlg.close()
+    toast('已儲存')
+    await reloadHistory()
+  } catch (err) {
+    console.error(err)
+    toast('儲存失敗，請檢查網路')
+  }
+})
+
+$('[data-delete]', editDlg).addEventListener('click', async () => {
+  const g = editing
+  if (!g) return
+  const label = gameLine(g)
+  const warn = g.status === 'live' ? '\n這場還在進行中，刪除後計分板比分會歸零。' : ''
+  if (!confirm(`刪除這場？\n${label}${warn}\n\n刪除後可以在紀錄頁按「復原」救回來。`)) return
+  try {
+    const ids = await deleteGame(g.id)
+    editDlg.close()
+    lastDeleted = { ids, label }
+    showUndo(`已刪除：${label}`)
+    await reloadHistory()
+  } catch (err) {
+    console.error(err)
+    toast('刪除失敗，請檢查網路')
+  }
+})
+
+function showUndo(text) {
+  $('[data-undo-text]', histDlg).textContent = text
+  $('[data-undo-bar]', histDlg).hidden = false
+}
+
+function hideUndo() {
+  lastDeleted = null
+  $('[data-undo-bar]', histDlg).hidden = true
+}
+
+async function restoreDeleted() {
+  if (!lastDeleted) return
+  try {
+    await restoreEvents(lastDeleted.ids)
+    toast(`已復原：${lastDeleted.label}`)
+    hideUndo()
+    await reloadHistory()
+  } catch (err) {
+    console.error(err)
+    toast('復原失敗，請檢查網路')
   }
 }
 

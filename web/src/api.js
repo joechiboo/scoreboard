@@ -50,6 +50,35 @@ export async function renameTeams(gameId, teamAName, teamBName) {
   )
 }
 
+// 把某場比分改成指定數字：補手動加減分事件，原本的事件不動（每筆限 ±3，差太多就拆成多筆）
+export async function setScore(gameId, scoreA, scoreB) {
+  const now = await getScore(gameId)
+  const rows = []
+  for (const [team, diff] of [['A', scoreA - now.score_a], ['B', scoreB - now.score_b]]) {
+    for (let left = diff; left !== 0;) {
+      const step = Math.max(-3, Math.min(3, left))
+      rows.push({ game_id: gameId, team, points: step, source: 'manual' })
+      left -= step
+    }
+  }
+  if (rows.length) unwrap(await supabase.from('score_events').insert(rows))
+  return rows.length
+}
+
+// 刪除一場：把還沒撤銷的加分全部標成撤銷，比分變 0:0，紀錄就不再顯示。
+// 資料不刪；回傳這次標記的事件 id，交給 restoreEvents 復原（之前就撤銷的不受影響）
+export async function deleteGame(gameId) {
+  const rows = unwrap(
+    await supabase.from('score_events').update({ undone: true }).eq('game_id', gameId).eq('undone', false).select('id'),
+  )
+  return rows.map((r) => r.id)
+}
+
+export async function restoreEvents(ids) {
+  if (!ids.length) return
+  unwrap(await supabase.from('score_events').update({ undone: false }).in('id', ids))
+}
+
 // 歷史比賽（含比分），舊的在前
 export async function listGames(limit = 500) {
   const [games, scores] = await Promise.all([
