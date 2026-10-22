@@ -65,14 +65,17 @@ export async function setScore(gameId, scoreA, scoreB) {
   return rows.length
 }
 
-// 刪除一場：把還沒撤銷的加分全部標成撤銷，比分變 0:0，紀錄就不再顯示。
+// 刪除場次：把還沒撤銷的加分全部標成撤銷，比分變 0:0，紀錄就不再顯示。
 // 資料不刪；回傳這次標記的事件 id，交給 restoreEvents 復原（之前就撤銷的不受影響）
-export async function deleteGame(gameId) {
+export async function deleteGames(gameIds) {
+  if (!gameIds.length) return []
   const rows = unwrap(
-    await supabase.from('score_events').update({ undone: true }).eq('game_id', gameId).eq('undone', false).select('id'),
+    await supabase.from('score_events').update({ undone: true }).in('game_id', gameIds).eq('undone', false).select('id'),
   )
   return rows.map((r) => r.id)
 }
+
+export const deleteGame = (gameId) => deleteGames([gameId])
 
 export async function restoreEvents(ids) {
   if (!ids.length) return

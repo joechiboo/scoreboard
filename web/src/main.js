@@ -1,7 +1,7 @@
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
-  setScore, deleteGame, restoreEvents,
+  setScore, deleteGame, deleteGames, restoreEvents,
 } from './api.js'
 import {
   groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished, newestFirst,
@@ -392,12 +392,14 @@ function renderHistory() {
     hasLive ? '進行中的那場要按「開新局」結束後才算進戰績' : null,
     '點一場可以改隊名、比分或刪除',
   ].filter(Boolean).map((t) => h('p', { className: 'hint note', textContent: t }))
-  body.replaceChildren(...(standings(day.games).length ? [table] : []), list, ...notes)
+  const delDay = h('button', { type: 'button', className: 'delete-day', textContent: `刪除這一天（${day.games.length} 場）` })
+  delDay.dataset.deleteDay = ''
+  body.replaceChildren(...(standings(day.games).length ? [table] : []), list, ...notes, delDay)
 }
 
-// 重新抓紀錄，盡量停在原本那一天（那天的場次全刪光了就停在相鄰的日期）
-async function reloadHistory() {
-  const key = days[dayIdx]?.key
+// 重新抓紀錄，盡量停在原本那一天（那天的場次全刪光了就停在相鄰的日期）；preferKey 指定要跳到哪一天
+async function reloadHistory(preferKey) {
+  const key = preferKey ?? days[dayIdx]?.key
   days = groupByDay(await listGames())
   const idx = days.findIndex((d) => d.key === key)
   dayIdx = idx >= 0 ? idx : Math.min(dayIdx, Math.max(days.length - 1, 0))
@@ -427,6 +429,7 @@ histDlg.addEventListener('click', async (e) => {
   if (!btn) return
   const day = days[dayIdx]
   if ('restore' in btn.dataset) return restoreDeleted()
+  if ('deleteDay' in btn.dataset) return deleteDay(day)
   if (btn.dataset.day) {
     // ‹ 往較早的日期（陣列後面），› 往較新的日期
     dayIdx = Math.min(Math.max(dayIdx - Number(btn.dataset.day), 0), Math.max(days.length - 1, 0))
@@ -510,7 +513,7 @@ $('[data-delete]', editDlg).addEventListener('click', async () => {
   try {
     const ids = await deleteGame(g.id)
     editDlg.close()
-    lastDeleted = { ids, label }
+    lastDeleted = { ids, label, dayKey: days[dayIdx]?.key }
     showUndo(`已刪除：${label}`)
     await reloadHistory()
   } catch (err) {
@@ -529,13 +532,30 @@ function hideUndo() {
   $('[data-undo-bar]', histDlg).hidden = true
 }
 
+async function deleteDay(day) {
+  if (!day) return
+  const live = day.games.some((g) => g.status === 'live')
+  const warn = live ? '\n其中有進行中的場次，刪除後計分板比分會歸零。' : ''
+  if (!confirm(`刪除 ${day.label} 全部 ${day.games.length} 場？${warn}\n\n刪除後可以在紀錄頁按「復原」救回來。`)) return
+  try {
+    const ids = await deleteGames(day.games.map((g) => g.id))
+    lastDeleted = { ids, label: `${day.label} 全部 ${day.games.length} 場`, dayKey: day.key }
+    showUndo(`已刪除：${lastDeleted.label}`)
+    await reloadHistory()
+  } catch (err) {
+    console.error(err)
+    toast('刪除失敗，請檢查網路')
+  }
+}
+
 async function restoreDeleted() {
   if (!lastDeleted) return
   try {
-    await restoreEvents(lastDeleted.ids)
-    toast(`已復原：${lastDeleted.label}`)
+    const { ids, label, dayKey: restoredDay } = lastDeleted
+    await restoreEvents(ids)
+    toast(`已復原：${label}`)
     hideUndo()
-    await reloadHistory()
+    await reloadHistory(restoredDay)
   } catch (err) {
     console.error(err)
     toast('復原失敗，請檢查網路')

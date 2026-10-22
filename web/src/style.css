@@ -193,6 +193,19 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .games li:hover, .games li:active { background: var(--btn); }
 .field .score-input { flex: none; width: 4.2em; text-align: center; font-variant-numeric: tabular-nums; }
 .modal .danger { background: color-mix(in srgb, #e5484d 22%, var(--btn)); color: #ff8a8d; }
+/* 刪除整天：放在清單最底，做成不起眼的文字按鈕，避免誤按 */
+.modal .delete-day {
+  display: block;
+  width: 100%;
+  margin: 18px 0 4px;
+  padding: 0.5em 0;
+  background: none;
+  border: 1px dashed color-mix(in srgb, #e5484d 45%, transparent);
+  color: #ff8a8d;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.modal .delete-day:active { background: color-mix(in srgb, #e5484d 12%, transparent); }
 .undo-bar {
   display: flex;
   align-items: center;
