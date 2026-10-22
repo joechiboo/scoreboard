@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🏀</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="46" fill="#f2711c" stroke="#1a1a1a" stroke-width="5"/>
+  <g fill="none" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round">
+    <path d="M50 4v92M4 50h92"/>
+    <path d="M18 17c14 10 20 21 20 33s-6 23-20 33"/>
+    <path d="M82 17c-14 10-20 21-20 33s6 23 20 33"/>
+  </g>
+</svg>
