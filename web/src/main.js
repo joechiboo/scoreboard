@@ -67,18 +67,20 @@ app.innerHTML = `
       <h2 data-day-label>紀錄</h2>
       <button type="button" data-day="1" aria-label="較新">›</button>
     </header>
-    <div data-history-body></div>
+    <div class="records-body" data-history-body></div>
     <p class="undo-bar" data-undo-bar hidden>
       <span data-undo-text></span>
       <button type="button" data-restore>復原</button>
     </p>
-    <div class="actions">
-      <button type="button" data-share-line class="primary">分享到 LINE</button>
-      <button type="button" data-copy>複製文字</button>
-    </div>
-    <div class="actions">
-      <button type="button" data-close>關閉</button>
-    </div>
+    <footer class="records-foot">
+      <div class="actions">
+        <button type="button" data-share-line class="primary">分享到 LINE</button>
+        <button type="button" data-copy>複製文字</button>
+      </div>
+      <div class="actions">
+        <button type="button" data-close>關閉</button>
+      </div>
+    </footer>
   </dialog>
   <dialog class="modal" data-edit>
     <form data-edit-form>

@@ -146,7 +146,35 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .modal button:disabled { opacity: 0.4; cursor: default; transform: none; }
 
 /* 紀錄 */
-.records { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+/* 紀錄：幾乎佔滿畫面；上方日期列與下方按鈕固定，中間戰績與場次捲動 */
+.records {
+  width: min(760px, calc(100vw - 24px));
+  height: min(960px, calc(100dvh - 24px));
+  max-width: none;
+  max-height: none;
+  padding: 20px clamp(16px, 3vw, 32px);
+}
+.records[open] { display: flex; flex-direction: column; }
+.records-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: clamp(1rem, 1.6vmin + 0.6rem, 1.35rem); /* 看短邊，手機橫放時字不會跟著變大 */
+}
+.records .standings th { font-size: 0.8em; }
+.records .day-nav h2 { font-size: clamp(1.15rem, 1.5vmin + 0.8rem, 1.6rem); }
+.records-foot { flex: none; }
+/* 矮螢幕（手機橫放）：按鈕併成一排、留白縮小，讓中間能捲的區域大一點 */
+@media (max-height: 500px) {
+  .records { padding: 12px 20px; }
+  .records .day-nav { margin-bottom: 6px; }
+  .records .standings th, .records .standings td { padding: 3px 4px; }
+  .records-foot { display: flex; gap: 8px; }
+  .records-foot .actions { margin-top: 10px; }
+  .records-foot .actions:first-child { flex: 2; }
+  .records-foot .actions:last-child { flex: 1; }
+}
 .day-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .day-nav h2 { flex: 1; margin: 0; text-align: center; font-size: 1.15rem; }
 .modal .day-nav button { flex: none; width: 2.4em; padding: 0.3em 0; font-size: 1.3rem; }
@@ -155,13 +183,13 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .standings th:first-child, .standings td:first-child { text-align: left; }
 .standings th { color: var(--muted); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--btn); }
 .standings tbody tr:first-child td { color: var(--a); font-weight: 700; }
-.games { margin: 14px 0 0; padding-left: 1.6em; line-height: 1.8; color: var(--muted); font-variant-numeric: tabular-nums; }
+.games { margin: 14px 0 0; padding-left: 2.2em; line-height: 1.8; color: var(--muted); font-variant-numeric: tabular-nums; }
 .games li { color: var(--text); }
-.games .time { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.4; margin-top: 4px; }
+.games .time { display: block; color: var(--muted); font-size: 0.8em; line-height: 1.4; margin-top: 4px; }
 .modal .note { margin: 10px 0 0; font-size: 0.85rem; }
 
 /* 編輯一場 */
-.games li { cursor: pointer; border-radius: 8px; padding: 2px 6px; margin-left: -6px; }
+.games li { cursor: pointer; border-radius: 8px; padding: 2px 6px; }
 .games li:hover, .games li:active { background: var(--btn); }
 .field .score-input { flex: none; width: 4.2em; text-align: center; font-variant-numeric: tabular-nums; }
 .modal .danger { background: color-mix(in srgb, #e5484d 22%, var(--btn)); color: #ff8a8d; }
