@@ -94,6 +94,7 @@ button {
   touch-action: manipulation;
 }
 button:active { background: var(--btn-active); transform: scale(0.96); }
+.bar [data-mode-btn].half { background: color-mix(in srgb, var(--b) 35%, var(--btn)); }
 .bar .help {
   flex: none;
   width: 2.6em;

@@ -1,7 +1,7 @@
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
-  setScore, deleteGame, deleteGames, restoreEvents,
+  setScore, deleteGame, deleteGames, restoreEvents, setGameMode,
 } from './api.js'
 import {
   groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished, newestFirst,
@@ -11,6 +11,11 @@ import {
 const DEFAULT_TEAMS = ['A', 'B', 'C', 'D']
 // 資料庫的預設隊名，開新局時改用 A、B
 const PLACEHOLDER_NAMES = ['主隊', '客隊']
+// 點一下加幾分：全場一般進球 2 分；半場鬥牛每球 1 分。上滑 +1、下滑 −1 兩種模式都一樣
+const TAP_POINTS = { full: 2, half: 1 }
+const MODE_LABEL = { full: '全場', half: '半場' }
+// 資料庫還沒加 mode 欄位（舊資料）時一律當全場
+const modeOf = (g) => (g?.mode === 'half' ? 'half' : 'full')
 
 const app = document.querySelector('#app')
 
@@ -28,14 +33,16 @@ app.innerHTML = `
     <button data-action="undo">↶ 撤銷</button>
     <button data-action="new">開新局</button>
     <button data-action="history">紀錄</button>
+    <button data-action="mode" data-mode-btn title="切換全場／半場">全場</button>
     <button data-action="help" class="help" aria-label="操作說明">?</button>
   </footer>
   <dialog class="modal" data-help>
     <h2>操作方式</h2>
     <ul>
-      <li><b>點一下</b>比分：+1</li>
-      <li><b>往上滑</b>：+1</li>
+      <li><b>點一下</b>比分：全場 +2、半場 +1</li>
+      <li><b>往上滑</b>：+1（例如三分球再補 1 分）</li>
       <li><b>往下滑</b>：−1（最低 0）</li>
+      <li><b>全場／半場</b>按鈕：切換這場的模式，所有裝置一起換；開新局會沿用</li>
       <li><b>點隊名</b>：改這場的隊名</li>
       <li><b>撤銷</b>：取消最後一筆加減分</li>
       <li><b>開新局</b>：選下一場的兩隊，目前這場存進紀錄</li>
@@ -142,6 +149,14 @@ function renderNames() {
   $('[data-name]', teamEl('B')).textContent = game?.team_b_name ?? '—'
 }
 
+function renderMode() {
+  const mode = modeOf(game)
+  const btn = $('[data-mode-btn]')
+  btn.textContent = MODE_LABEL[mode]
+  btn.classList.toggle('half', mode === 'half')
+  app.dataset.mode = mode
+}
+
 function renderStatus(online) {
   $('[data-status]').classList.toggle('online', online)
 }
@@ -185,6 +200,7 @@ async function loadGame(g) {
   unsubscribe = null
   game = g
   renderNames()
+  renderMode()
   if (!game) {
     toast('目前沒有進行中的比賽')
     return
@@ -200,6 +216,7 @@ async function loadGame(g) {
       if (g?.id !== game?.id) return
       game = g
       renderNames()
+      renderMode()
     },
     onStatus: renderStatus,
   })
@@ -217,7 +234,7 @@ async function run(action) {
   }
 }
 
-// ---------- 計分手勢：點一下或上滑 +1，下滑 −1 ----------
+// ---------- 計分手勢：點一下 +2（全場）／+1（半場），上滑 +1，下滑 −1 ----------
 
 const SWIPE_PX = 40
 
@@ -250,9 +267,26 @@ for (const el of app.querySelectorAll('[data-team]')) {
     const dy = e.clientY - startY
     startY = null
     if (dy > SWIPE_PX) score(el.dataset.team, -1)
-    else if (dy < -SWIPE_PX || Math.abs(dy) < 10) score(el.dataset.team, 1)
+    else if (dy < -SWIPE_PX) score(el.dataset.team, 1)
+    else if (Math.abs(dy) < 10) score(el.dataset.team, TAP_POINTS[modeOf(game)])
   })
   el.addEventListener('pointercancel', () => (startY = null))
+}
+
+// ---------- 全場／半場 ----------
+
+async function toggleMode() {
+  if (!game) return
+  const next = modeOf(game) === 'full' ? 'half' : 'full'
+  try {
+    game = await setGameMode(game.id, next)
+    renderMode()
+    toast(next === 'half' ? '半場：點一下 +1' : '全場：點一下 +2')
+  } catch (err) {
+    console.error(err)
+    // PGRST204：資料庫還沒套用 mode 欄位的 migration
+    toast(err?.code === 'PGRST204' ? '資料庫還沒更新，暫時不能切換半場' : '切換失敗，請檢查網路')
+  }
 }
 
 // ---------- 改隊名 ----------
@@ -582,6 +616,8 @@ app.addEventListener('click', async (e) => {
     openNewGame()
   } else if (btn.dataset.action === 'history') {
     openHistory()
+  } else if (btn.dataset.action === 'mode') {
+    toggleMode()
   }
 })
 

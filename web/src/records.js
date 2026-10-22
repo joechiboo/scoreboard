@@ -85,7 +85,7 @@ export function gameTime(g) {
 
 // 贏的隊伍放前面，方便一眼看出勝負
 export function gameLine(g) {
-  const live = g.status === 'live' ? '（進行中）' : ''
+  const live = `${g.mode === 'half' ? '（半場）' : ''}${g.status === 'live' ? '（進行中）' : ''}`
   if (winnerOf(g) === 'B') return `${g.team_b_name} ${g.score_b} : ${g.score_a} ${g.team_a_name}${live}`
   return `${g.team_a_name} ${g.score_a} : ${g.score_b} ${g.team_b_name}${live}`
 }

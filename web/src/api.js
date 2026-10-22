@@ -82,12 +82,17 @@ export async function restoreEvents(ids) {
   unwrap(await supabase.from('score_events').update({ undone: false }).in('id', ids))
 }
 
+// 切換目前這場的模式：'full' 全場／'half' 半場（其他裝置透過 Realtime 跟著更新）
+export async function setGameMode(gameId, mode) {
+  return unwrap(await supabase.from('games').update({ mode }).eq('id', gameId).select().single())
+}
+
 // 歷史比賽（含比分），舊的在前
 export async function listGames(limit = 500) {
   const [games, scores] = await Promise.all([
     supabase
       .from('games')
-      .select('id, team_a_name, team_b_name, status, created_at, ended_at')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(limit)
       .then(unwrap),
