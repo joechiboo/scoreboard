@@ -71,13 +71,16 @@ export function recordText(t) {
   return `${t.won}勝${t.lost}敗${t.tied ? `${t.tied}和` : ''}`
 }
 
+// 超過這個長度就不顯示分鐘數：多半是最後一場沒按開新局，隔天才結束
+const MAX_GAME_MINUTES = 120
+
 // 開局時間「19:32」；打完的場次附上打了幾分鐘
 export function gameTime(g) {
   const start = new Date(g.created_at)
   const hhmm = `${pad(start.getHours())}:${pad(start.getMinutes())}`
   if (!g.ended_at) return hhmm
   const minutes = Math.round((new Date(g.ended_at) - start) / 60000)
-  return `${hhmm}（${minutes} 分鐘）`
+  return minutes > MAX_GAME_MINUTES ? hhmm : `${hhmm}（${minutes} 分鐘）`
 }
 
 // 贏的隊伍放前面，方便一眼看出勝負
@@ -85,6 +88,11 @@ export function gameLine(g) {
   const live = g.status === 'live' ? '（進行中）' : ''
   if (winnerOf(g) === 'B') return `${g.team_b_name} ${g.score_b} : ${g.score_a} ${g.team_a_name}${live}`
   return `${g.team_a_name} ${g.score_a} : ${g.score_b} ${g.team_b_name}${live}`
+}
+
+// 顯示順序：最新的在上（進行中的那場一定是最新開的），編號仍照開打順序，第 1 場在最下面
+export function newestFirst(games) {
+  return games.map((g, i) => ({ game: g, no: i + 1 })).reverse()
 }
 
 // 貼到 LINE 群組的文字
@@ -96,6 +104,6 @@ export function shareText(day) {
     lines.push(`${t.name}　${recordText(t)}　得 ${t.pointsFor}／失 ${t.pointsAgainst}`)
   }
   lines.push('', '【各場比分】')
-  day.games.forEach((g, i) => lines.push(`${i + 1}. ${gameTime(g)}　${gameLine(g)}`))
+  for (const { game, no } of newestFirst(day.games)) lines.push(`${no}. ${gameTime(game)}　${gameLine(game)}`)
   return lines.join('\n')
 }

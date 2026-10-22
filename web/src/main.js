@@ -3,7 +3,7 @@ import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
 } from './api.js'
 import {
-  groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished,
+  groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished, newestFirst,
 } from './records.js'
 
 // 開新局時一定有的快選隊名
@@ -339,7 +339,7 @@ function renderHistory() {
     h('td', { textContent: t.pointsAgainst }),
   ]))
   const table = h('table', { className: 'standings' }, [h('thead', {}, [head]), h('tbody', {}, rows)])
-  const list = h('ol', { className: 'games' }, day.games.map((g) => h('li', {}, [
+  const list = h('ol', { className: 'games' }, newestFirst(day.games).map(({ game: g, no }) => h('li', { value: no }, [
     h('span', { className: 'time', textContent: gameTime(g) }),
     gameLine(g),
   ])))
@@ -372,16 +372,29 @@ histDlg.addEventListener('click', async (e) => {
     dayIdx = Math.min(Math.max(dayIdx - Number(btn.dataset.day), 0), Math.max(days.length - 1, 0))
     renderHistory()
   } else if ('shareLine' in btn.dataset && day) {
-    window.open(`https://line.me/R/share?text=${encodeURIComponent(shareText(day))}`, '_blank')
+    // line.me/R/share 只有手機會跳進 LINE App，電腦瀏覽器只會看到「請用手機開啟」，所以電腦改成複製
+    if (isMobile()) window.open(`https://line.me/R/share?text=${encodeURIComponent(shareText(day))}`, '_blank')
+    else await copyText(shareText(day), '已複製，請貼到 LINE 電腦版')
   } else if ('copy' in btn.dataset && day) {
-    try {
-      await navigator.clipboard.writeText(shareText(day))
-      toast('已複製，可以貼到 LINE')
-    } catch {
-      toast('無法複製')
-    }
+    await copyText(shareText(day), '已複製，可以貼到 LINE')
   }
 })
+
+function isMobile() {
+  if (navigator.userAgentData) return navigator.userAgentData.mobile
+  // iPadOS 的 UA 會偽裝成 Mac，用觸控點數補判
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+}
+
+async function copyText(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(msg)
+  } catch {
+    toast('無法複製')
+  }
+}
 
 // ---------- 底部按鈕 ----------
 
