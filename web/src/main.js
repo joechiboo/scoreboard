@@ -2,7 +2,9 @@ import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
 } from './api.js'
-import { groupByDay, standings, recordText, gameLine, shareText, dayKey, isPlayed, isFinished } from './records.js'
+import {
+  groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished,
+} from './records.js'
 
 // 開新局時一定有的快選隊名
 const DEFAULT_TEAMS = ['A', 'B', 'C', 'D']
@@ -337,7 +339,10 @@ function renderHistory() {
     h('td', { textContent: t.pointsAgainst }),
   ]))
   const table = h('table', { className: 'standings' }, [h('thead', {}, [head]), h('tbody', {}, rows)])
-  const list = h('ol', { className: 'games' }, day.games.map((g) => h('li', { textContent: gameLine(g) })))
+  const list = h('ol', { className: 'games' }, day.games.map((g) => h('li', {}, [
+    h('span', { className: 'time', textContent: gameTime(g) }),
+    gameLine(g),
+  ])))
   const hasLive = day.games.some((g) => !isFinished(g))
   const note = hasLive ? h('p', { className: 'hint note', textContent: '進行中的那場要按「開新局」結束後才算進戰績' }) : ''
   body.replaceChildren(...(standings(day.games).length ? [table] : []), list, note)

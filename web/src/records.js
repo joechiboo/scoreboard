@@ -71,6 +71,15 @@ export function recordText(t) {
   return `${t.won}勝${t.lost}敗${t.tied ? `${t.tied}和` : ''}`
 }
 
+// 開局時間「19:32」；打完的場次附上打了幾分鐘
+export function gameTime(g) {
+  const start = new Date(g.created_at)
+  const hhmm = `${pad(start.getHours())}:${pad(start.getMinutes())}`
+  if (!g.ended_at) return hhmm
+  const minutes = Math.round((new Date(g.ended_at) - start) / 60000)
+  return `${hhmm}（${minutes} 分鐘）`
+}
+
 // 贏的隊伍放前面，方便一眼看出勝負
 export function gameLine(g) {
   const live = g.status === 'live' ? '（進行中）' : ''
@@ -87,6 +96,6 @@ export function shareText(day) {
     lines.push(`${t.name}　${recordText(t)}　得 ${t.pointsFor}／失 ${t.pointsAgainst}`)
   }
   lines.push('', '【各場比分】')
-  day.games.forEach((g, i) => lines.push(`${i + 1}. ${gameLine(g)}`))
+  day.games.forEach((g, i) => lines.push(`${i + 1}. ${gameTime(g)}　${gameLine(g)}`))
   return lines.join('\n')
 }

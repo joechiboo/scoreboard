@@ -157,6 +157,7 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .standings tbody tr:first-child td { color: var(--a); font-weight: 700; }
 .games { margin: 14px 0 0; padding-left: 1.6em; line-height: 1.8; color: var(--muted); font-variant-numeric: tabular-nums; }
 .games li { color: var(--text); }
+.games .time { display: block; color: var(--muted); font-size: 0.8rem; line-height: 1.4; margin-top: 4px; }
 .modal .note { margin: 10px 0 0; font-size: 0.85rem; }
 
 .status, .dot {
