@@ -99,9 +99,11 @@ export function newestFirst(games) {
 export function shareText(day) {
   const finished = day.games.filter(isFinished).length
   const live = day.games.length - finished
-  const lines = [`🏀 ${day.label} 比賽紀錄`, `共 ${finished} 場${live ? `（另有 1 場進行中）` : ''}`, '', '【戰績】']
-  for (const t of standings(day.games)) {
-    lines.push(`${t.name}　${recordText(t)}　得 ${t.pointsFor}／失 ${t.pointsAgainst}`)
+  const lines = [`🏀 ${day.label} 比賽紀錄`, `共 ${finished} 場${live ? `（另有 1 場進行中）` : ''}`]
+  const table = standings(day.games)
+  if (table.length) {
+    lines.push('', '【戰績】')
+    for (const t of table) lines.push(`${t.name}　${recordText(t)}　得 ${t.pointsFor}／失 ${t.pointsAgainst}`)
   }
   lines.push('', '【各場比分】')
   for (const { game, no } of newestFirst(day.games)) lines.push(`${no}. ${gameTime(game)}　${gameLine(game)}`)

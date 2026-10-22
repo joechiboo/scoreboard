@@ -48,6 +48,8 @@ html, body {
   padding: 16px 12px;
   border-top: 6px solid var(--accent);
   min-height: 0;
+  min-width: 0;
+  container-type: size; /* 比分字級依隊伍區塊大小決定 */
   cursor: pointer;
   touch-action: none; /* 讓上下滑不會捲動頁面 */
 }
@@ -58,16 +60,20 @@ html, body {
 .name {
   margin: 0;
   font-size: clamp(1.2rem, 4vw, 3rem);
+  font-size: clamp(1.2rem, min(9cqh, 7cqw), 4rem);
   color: var(--accent);
   font-weight: 700;
 }
 
+/* 場上離平板很遠也要看得到：比分盡量撐滿隊伍區塊，寬或高先碰到哪邊就停 */
 .score {
-  font-size: clamp(5rem, 22vw, 26rem);
+  font-size: clamp(5rem, 22vw, 26rem); /* 不支援 container query 的舊瀏覽器 */
+  font-size: min(66cqh, 78cqw);
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+.score[data-digits="3"] { font-size: min(66cqh, 54cqw); }
 .score.bump { animation: bump 0.35s ease-out; }
 @keyframes bump {
   0% { transform: scale(1.18); color: var(--accent); }
@@ -254,9 +260,7 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 /* popover 的瀏覽器預設樣式（置中、邊框、白底）蓋掉，維持原本的提示外觀 */
 .toast[popover] { right: auto; bottom: auto; margin: 0; border: 0; color: var(--text); overflow: visible; }
 
-/* 直立手機：上下排列 */
-@media (orientation: portrait) and (max-width: 700px) {
+/* 直立（手機、平板直放）：上下排列，每隊才分得到夠寬的區塊 */
+@media (orientation: portrait) {
   .board { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
-  .score { font-size: clamp(5rem, 30vw, 12rem); }
-  .name { font-size: 1.4rem; }
 }

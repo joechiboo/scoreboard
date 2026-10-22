@@ -129,6 +129,7 @@ function paint() {
     const el = $('[data-score]', teamEl(team))
     if (el.textContent !== value) {
       el.textContent = value
+      el.dataset.digits = Math.min(value.length, 3) // 三位數以上縮小字級才放得下
       el.classList.remove('bump')
       void el.offsetWidth // 重新觸發動畫
       el.classList.add('bump')
