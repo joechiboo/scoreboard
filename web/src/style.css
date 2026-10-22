@@ -107,7 +107,57 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .modal::backdrop { background: rgba(0, 0, 0, 0.6); }
 .modal h2 { margin: 0 0 12px; font-size: 1.3rem; }
 .modal ul { margin: 0 0 20px; padding-left: 1.2em; line-height: 1.9; }
-.modal form button { width: 100%; font-size: 1.1rem; }
+.modal form[method="dialog"] button { width: 100%; font-size: 1.1rem; }
+.modal button { font-size: 1.05rem; padding: 0.6em 0; }
+.modal .hint { color: var(--muted); margin: 0 0 14px; font-size: 0.95rem; line-height: 1.5; }
+
+.name { cursor: text; }
+
+/* 開新局 */
+.field { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.field span { flex: none; width: 3.6em; color: var(--accent); font-weight: 700; }
+.field input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.1rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--btn);
+  border-radius: 10px;
+  padding: 0.5em 0.7em;
+  user-select: text;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+.field.team-a, .chips[data-chips="A"] { --accent: var(--a); }
+.field.team-b, .chips[data-chips="B"] { --accent: var(--b); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px calc(3.6em + 10px); }
+.modal .chip {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.35em 0.9em;
+  border-radius: 999px;
+  background: var(--btn);
+}
+.actions { display: flex; gap: 8px; margin-top: 16px; }
+.actions button { flex: 1; }
+.actions + .actions { margin-top: 8px; }
+.modal .primary { background: var(--b); color: #fff; }
+.modal button:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+/* 紀錄 */
+.records { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.day-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.day-nav h2 { flex: 1; margin: 0; text-align: center; font-size: 1.15rem; }
+.modal .day-nav button { flex: none; width: 2.4em; padding: 0.3em 0; font-size: 1.3rem; }
+.standings { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.standings th, .standings td { padding: 6px 4px; text-align: right; }
+.standings th:first-child, .standings td:first-child { text-align: left; }
+.standings th { color: var(--muted); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--btn); }
+.standings tbody tr:first-child td { color: var(--a); font-weight: 700; }
+.games { margin: 14px 0 0; padding-left: 1.6em; line-height: 1.8; color: var(--muted); font-variant-numeric: tabular-nums; }
+.games li { color: var(--text); }
+.modal .note { margin: 10px 0 0; font-size: 0.85rem; }
 
 .status, .dot {
   display: inline-block;
