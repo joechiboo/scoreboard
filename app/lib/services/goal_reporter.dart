@@ -39,7 +39,7 @@ class PendingGoal {
 /// 把自動進球寫入 Supabase。
 /// - 每筆進球先存到手機，送成功才刪除；斷線時每 5 秒重試
 /// - 每筆帶 App 產生的 client_id，重送時資料庫會忽略重複的那筆
-/// - 只傳籃框編號，隊伍與分數由資料庫依比賽模式、換場狀態決定
+/// - 只傳籃框編號，隊伍由資料庫依比賽模式、換場狀態決定
 class GoalReporter {
   GoalReporter(this._client, this._games);
 
@@ -90,6 +90,8 @@ class GoalReporter {
             'client_id': goal.clientId,
             'game_id': game.id,
             'hoop': goal.hoop,
+            // 與資料庫 trigger 的預設相同；明確帶上，舊版資料庫（沒有自動補分數）也能寫入
+            'points': game.autoPoints,
             'source': 'auto',
             'confidence': goal.confidence,
           },

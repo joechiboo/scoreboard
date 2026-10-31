@@ -54,7 +54,7 @@ class GameService {
   Future<LiveGame?> fetch() async {
     final row = await _client
         .from('games')
-        .select('id, team_a_name, team_b_name, sides_swapped, mode')
+        .select()
         .eq('status', 'live')
         .maybeSingle();
     current = row == null ? null : LiveGame.fromRow(row);

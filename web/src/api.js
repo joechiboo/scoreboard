@@ -34,22 +34,25 @@ export async function undoLast(gameId) {
 
 // mode：'full' 全場（兩個籃框各對應一隊）／'half' 半場（自動進球需選隊伍）
 export async function newGame(teamAName = '主隊', teamBName = '客隊', mode = 'full') {
-  return unwrap(
-    await supabase.rpc('new_game', { p_team_a_name: teamAName, p_team_b_name: teamBName, p_mode: mode }),
-  )
+  const args = { p_team_a_name: teamAName, p_team_b_name: teamBName }
+  const res = await supabase.rpc('new_game', { ...args, p_mode: mode })
+  // 資料庫尚未套用 game_modes migration 時沒有 p_mode 參數，改用舊版（只有全場）
+  if (res.error?.code === 'PGRST202') return unwrap(await supabase.rpc('new_game', args))
+  return unwrap(res)
 }
 
 // 半場模式下 App 偵測到、還沒選隊伍的進球（舊的在前）
 export async function getPendingGoals(gameId) {
-  return unwrap(
-    await supabase
-      .from('score_events')
-      .select('id, points, created_at')
-      .eq('game_id', gameId)
-      .eq('pending', true)
-      .eq('undone', false)
-      .order('id'),
-  )
+  const res = await supabase
+    .from('score_events')
+    .select('id, points, created_at')
+    .eq('game_id', gameId)
+    .eq('pending', true)
+    .eq('undone', false)
+    .order('id')
+  // 資料庫尚未套用 game_modes migration 時沒有 pending 欄位，視為沒有待確認的進球
+  if (res.error?.code === '42703') return []
+  return unwrap(res)
 }
 
 // 把待確認的進球記給某隊。只更新仍待確認的那筆，兩台同時按時只有一台生效
