@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../config.dart';
 import '../services/game_service.dart';
 import '../services/goal_gate.dart';
 import '../services/goal_reporter.dart';
@@ -82,10 +81,17 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       messenger.showSnackBar(const SnackBar(content: Text('冷卻中，忽略'), duration: Duration(seconds: 1)));
       return;
     }
-    final hoop = widget.settings.hoop;
+    final game = widget.games.current;
+    // 半場只有一個籃框，固定回報 1 號
+    final hoop = game?.isHalfCourt ?? false ? 1 : widget.settings.hoop;
     widget.reporter.report(hoop: hoop, confidence: confidence);
-    final team = widget.games.current?.teamNameForHoop(hoop) ?? '';
-    messenger.showSnackBar(SnackBar(content: Text('進球！$team +$autoGoalPoints'), duration: const Duration(seconds: 1)));
+    final team = game?.teamNameForHoop(hoop);
+    final text = game == null
+        ? '進球！'
+        : team == null
+            ? '進球 +${game.autoPoints}，請在計分板選隊伍'
+            : '進球！$team +${game.autoPoints}';
+    messenger.showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 1)));
   }
 
   @override
@@ -133,7 +139,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           StreamBuilder<LiveGame?>(
             stream: widget.games.stream,
             initialData: widget.games.current,
-            builder: (_, snap) => _chip('$hoop 號籃框 → ${snap.data?.teamNameForHoop(hoop) ?? '—'}'),
+            builder: (_, snap) => _chip(
+              snap.data?.isHalfCourt ?? false
+                  ? '半場：進球在計分板選隊伍'
+                  : '$hoop 號籃框 → ${snap.data?.teamNameForHoop(hoop) ?? '—'}',
+            ),
           ),
           const Spacer(),
           StreamBuilder<int>(

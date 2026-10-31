@@ -1,5 +1,7 @@
 import './style.css'
-import { getCurrentGame, getScore, addScore, undoLast, newGame, subscribe } from './api.js'
+import {
+  getCurrentGame, getScore, getPendingGoals, addScore, assignGoal, dismissGoal, undoLast, newGame, subscribe,
+} from './api.js'
 
 const app = document.querySelector('#app')
 
@@ -12,8 +14,17 @@ app.innerHTML = `
       </section>
     `).join('')}
   </main>
+  <div class="claim" data-claim hidden>
+    <p><b data-claim-text>🏀 進球</b> 記給哪一隊？<small data-claim-more></small></p>
+    <div class="claim-buttons">
+      <button data-claim-team="A" class="claim-a">—</button>
+      <button data-claim-team="B" class="claim-b">—</button>
+      <button data-claim-skip>不算</button>
+    </div>
+  </div>
   <footer class="bar">
     <span class="status" data-status title="連線狀態"></span>
+    <span class="mode" data-mode></span>
     <button data-action="undo">↶ 撤銷</button>
     <button data-action="new">開新局</button>
     <button data-action="help" class="help" aria-label="操作說明">?</button>
@@ -25,10 +36,29 @@ app.innerHTML = `
       <li><b>往上滑</b>：+1</li>
       <li><b>往下滑</b>：−1（最低 0）</li>
       <li><b>撤銷</b>：取消最後一筆加減分</li>
-      <li><b>開新局</b>：比分歸零，所有裝置一起切換</li>
+      <li><b>開新局</b>：比分歸零，所有裝置一起切換；可選全場或半場</li>
+      <li><b>全場</b>：自動進球記給該籃框對應的隊伍（2 分）</li>
+      <li><b>半場</b>：自動進球會跳出「記給哪一隊？」，點隊名才計分（1 分）</li>
       <li>左下角燈號：<span class="dot online"></span>已連線　<span class="dot"></span>未連線</li>
     </ul>
     <form method="dialog"><button>知道了</button></form>
+  </dialog>
+  <dialog class="modal" data-new>
+    <form data-new-form>
+      <h2>開新局</h2>
+      <fieldset class="modes">
+        <legend>比賽模式</legend>
+        <label><input type="radio" id="mode-full" name="mode" value="full" checked> 全場<small>兩個籃框各對應一隊</small></label>
+        <label><input type="radio" id="mode-half" name="mode" value="half"> 半場<small>兩隊投同一個籃框</small></label>
+      </fieldset>
+      <label class="field">A 隊名稱<input id="team-a" name="a" maxlength="12" required></label>
+      <label class="field">B 隊名稱<input id="team-b" name="b" maxlength="12" required></label>
+      <p class="note">目前比分會歸零，所有裝置一起切換。</p>
+      <div class="actions">
+        <button type="button" data-new-cancel>取消</button>
+        <button type="submit" class="primary">開新局</button>
+      </div>
+    </form>
   </dialog>
   <div class="toast" data-toast hidden></div>
 `
@@ -77,15 +107,28 @@ function toast(msg) {
   toastTimer = setTimeout(() => (el.hidden = true), 2000)
 }
 
+// 半場模式：顯示最舊一筆待確認的進球
+let claims = []
+
+function renderClaims(list) {
+  claims = list
+  const el = $('[data-claim]')
+  el.hidden = list.length === 0
+  if (!list.length) return
+  $('[data-claim-text]').textContent = `🏀 進球 +${list[0].points}`
+  $('[data-claim-more]').textContent = list.length > 1 ? `（還有 ${list.length - 1} 筆）` : ''
+}
+
 // 重新抓比分；請求可能亂序回來，較早發出的結果不可蓋掉較新的結果
 async function refresh() {
   if (!game) return
   const req = ++reqSeq
   const gameId = game.id
-  const score = await getScore(gameId)
+  const [score, pendingGoals] = await Promise.all([getScore(gameId), getPendingGoals(gameId)])
   if (req > renderedReq && gameId === game?.id) {
     renderedReq = req
     renderScore(score)
+    renderClaims(pendingGoals)
   }
 }
 
@@ -100,6 +143,9 @@ async function loadGame(g) {
   }
   $('[data-name]', teamEl('A')).textContent = game.team_a_name
   $('[data-name]', teamEl('B')).textContent = game.team_b_name
+  $('[data-claim-team="A"]').textContent = game.team_a_name
+  $('[data-claim-team="B"]').textContent = game.team_b_name
+  $('[data-mode]').textContent = game.mode === 'half' ? '半場' : '全場'
   await refresh()
   unsubscribe = subscribe(game.id, {
     onChange: refresh,
@@ -171,20 +217,43 @@ app.addEventListener('click', async (e) => {
   } else if (btn.dataset.action === 'help') {
     $('[data-help]').showModal()
   } else if (btn.dataset.action === 'new') {
-    if (!confirm('確定要開新局？目前比分會歸零。')) return
-    try {
-      await loadGame(await newGame(game?.team_a_name, game?.team_b_name))
-    } catch (err) {
-      console.error(err)
-      toast('開新局失敗')
-    }
+    const form = $('[data-new-form]')
+    form.elements.mode.value = game?.mode ?? 'full'
+    form.elements.a.value = game?.team_a_name ?? '主隊'
+    form.elements.b.value = game?.team_b_name ?? '客隊'
+    $('[data-new]').showModal()
+  } else if (btn.dataset.newCancel !== undefined) {
+    $('[data-new]').close()
+  } else if (btn.dataset.claimTeam || btn.dataset.claimSkip !== undefined) {
+    const goal = claims[0]
+    if (!goal) return
+    const team = btn.dataset.claimTeam
+    run(async () => {
+      const rows = team ? await assignGoal(goal.id, team) : await dismissGoal(goal.id)
+      if (!rows.length) toast('這球已由其他裝置處理')
+      else if (team) toast(`${team === 'A' ? game.team_a_name : game.team_b_name} +${goal.points}`)
+    })
+  }
+})
+
+$('[data-new-form]').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const f = e.currentTarget.elements
+  $('[data-new]').close()
+  try {
+    await loadGame(await newGame(f.a.value.trim(), f.b.value.trim(), f.mode.value))
+  } catch (err) {
+    console.error(err)
+    toast('開新局失敗')
   }
 })
 
 // 點 modal 外面關閉
-$('[data-help]').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) e.currentTarget.close()
-})
+for (const dialog of app.querySelectorAll('dialog')) {
+  dialog.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.close()
+  })
+}
 
 loadGame(await getCurrentGame()).catch((err) => {
   console.error(err)

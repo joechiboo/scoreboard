@@ -9,6 +9,7 @@ class LiveGame {
     required this.teamAName,
     required this.teamBName,
     required this.sidesSwapped,
+    required this.mode,
   });
 
   final String id;
@@ -16,16 +17,27 @@ class LiveGame {
   final String teamBName;
   final bool sidesSwapped;
 
+  /// 'full' 全場：兩個籃框各對應一隊；'half' 半場：進球由計分板選隊伍。
+  final String mode;
+
+  bool get isHalfCourt => mode == 'half';
+
+  /// 自動進球的分數（與資料庫 trigger 一致）：全場 2 分、半場 1 分。
+  int get autoPoints => isHalfCourt ? 1 : 2;
+
   factory LiveGame.fromRow(Map<String, dynamic> row) => LiveGame(
         id: row['id'] as String,
         teamAName: row['team_a_name'] as String,
         teamBName: row['team_b_name'] as String,
         sidesSwapped: row['sides_swapped'] as bool? ?? false,
+        mode: row['mode'] as String? ?? 'full',
       );
 
-  /// 這個籃框目前對應的隊名（與資料庫 trigger 的規則一致）。
-  String teamNameForHoop(int hoop) =>
-      (hoop == 1) != sidesSwapped ? teamAName : teamBName;
+  /// 這個籃框目前對應的隊名（與資料庫 trigger 的規則一致）；半場沒有固定隊伍，回傳 null。
+  String? teamNameForHoop(int hoop) {
+    if (isHalfCourt) return null;
+    return (hoop == 1) != sidesSwapped ? teamAName : teamBName;
+  }
 }
 
 /// 追蹤目前進行中的比賽：開新局、換場對調時自動更新。
@@ -42,7 +54,7 @@ class GameService {
   Future<LiveGame?> fetch() async {
     final row = await _client
         .from('games')
-        .select('id, team_a_name, team_b_name, sides_swapped')
+        .select('id, team_a_name, team_b_name, sides_swapped, mode')
         .eq('status', 'live')
         .maybeSingle();
     current = row == null ? null : LiveGame.fromRow(row);

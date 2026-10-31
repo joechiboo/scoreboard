@@ -32,9 +32,37 @@ export async function undoLast(gameId) {
   return row?.id ? row : null
 }
 
-export async function newGame(teamAName = '主隊', teamBName = '客隊') {
+// mode：'full' 全場（兩個籃框各對應一隊）／'half' 半場（自動進球需選隊伍）
+export async function newGame(teamAName = '主隊', teamBName = '客隊', mode = 'full') {
   return unwrap(
-    await supabase.rpc('new_game', { p_team_a_name: teamAName, p_team_b_name: teamBName }),
+    await supabase.rpc('new_game', { p_team_a_name: teamAName, p_team_b_name: teamBName, p_mode: mode }),
+  )
+}
+
+// 半場模式下 App 偵測到、還沒選隊伍的進球（舊的在前）
+export async function getPendingGoals(gameId) {
+  return unwrap(
+    await supabase
+      .from('score_events')
+      .select('id, points, created_at')
+      .eq('game_id', gameId)
+      .eq('pending', true)
+      .eq('undone', false)
+      .order('id'),
+  )
+}
+
+// 把待確認的進球記給某隊。只更新仍待確認的那筆，兩台同時按時只有一台生效
+export async function assignGoal(id, team) {
+  return unwrap(
+    await supabase.from('score_events').update({ team, pending: false }).eq('id', id).eq('pending', true).select(),
+  )
+}
+
+// 待確認的進球判定為不算
+export async function dismissGoal(id) {
+  return unwrap(
+    await supabase.from('score_events').update({ undone: true }).eq('id', id).eq('pending', true).select(),
   )
 }
 

@@ -109,6 +109,66 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .modal ul { margin: 0 0 20px; padding-left: 1.2em; line-height: 1.9; }
 .modal form button { width: 100%; font-size: 1.1rem; }
 
+.mode {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.claim {
+  position: fixed;
+  left: 50%;
+  top: calc(16px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 32px));
+  background: var(--panel);
+  border: 2px solid #f5b83d;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+.claim[hidden] { display: none; }
+.claim p { margin: 0 0 10px; font-size: 1.1rem; text-align: center; }
+.claim small { display: block; color: var(--muted); font-size: 0.85rem; }
+.claim-buttons { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.claim-buttons button { font-size: 1.1rem; }
+.claim-a { background: color-mix(in srgb, var(--a) 45%, var(--btn)); }
+.claim-b { background: color-mix(in srgb, var(--b) 45%, var(--btn)); }
+.claim-buttons [data-claim-skip] { padding: 0.7em 1em; color: var(--muted); }
+
+.modal form { display: flex; flex-direction: column; gap: 12px; }
+.modal fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.modal legend { margin-bottom: 6px; color: var(--muted); font-size: 0.9rem; }
+.modes label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--btn);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modes label:has(input:checked) { border-color: var(--a); }
+.modes input { position: absolute; opacity: 0; pointer-events: none; }
+.modes small { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+.field input {
+  font: inherit;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: var(--btn);
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.note { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions button { font-size: 1.05rem; }
+.actions .primary { background: color-mix(in srgb, var(--a) 55%, var(--btn)); }
+
 .status, .dot {
   display: inline-block;
   width: 12px;

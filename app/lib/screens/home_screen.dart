@@ -30,20 +30,23 @@ class _HomeScreenState extends State<HomeScreen> {
         initialData: widget.games.current,
         builder: (context, snap) {
           final game = snap.data;
+          final half = game?.isHalfCourt ?? false;
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Text('這支手機對著哪個籃框？', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 12),
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 1, label: Text('1 號籃框')),
-                  ButtonSegment(value: 2, label: Text('2 號籃框')),
-                ],
-                selected: {_hoop},
-                onSelectionChanged: (s) => setState(() => widget.settings.hoop = _hoop = s.first),
-              ),
-              const SizedBox(height: 24),
+              if (!half) ...[
+                Text('這支手機對著哪個籃框？', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 1, label: Text('1 號籃框')),
+                    ButtonSegment(value: 2, label: Text('2 號籃框')),
+                  ],
+                  selected: {_hoop},
+                  onSelectionChanged: (s) => setState(() => widget.settings.hoop = _hoop = s.first),
+                ),
+                const SizedBox(height: 24),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -52,14 +55,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('目前比賽：${game.teamAName} vs ${game.teamBName}'),
+                            Text('目前比賽（${half ? '半場' : '全場'}）：${game.teamAName} vs ${game.teamBName}'),
                             const SizedBox(height: 8),
                             Text(
-                              '進球會記給「${game.teamNameForHoop(_hoop)}」',
+                              half ? '進球 +${game.autoPoints}，在計分板選擇隊伍' : '進球會記給「${game.teamNameForHoop(_hoop)}」',
                               style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary),
                             ),
                             const SizedBox(height: 4),
-                            Text('換場對調在計分板網頁上操作，這裡會自動更新', style: theme.textTheme.bodySmall),
+                            Text(
+                              half ? '半場兩隊投同一個籃框，只需要一支手機' : '換場對調在計分板網頁上操作，這裡會自動更新',
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ],
                         ),
                 ),

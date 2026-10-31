@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import '../config.dart';
 import 'game_service.dart';
 
 /// 一筆尚未成功寫入的自動進球。
@@ -40,7 +39,7 @@ class PendingGoal {
 /// 把自動進球寫入 Supabase。
 /// - 每筆進球先存到手機，送成功才刪除；斷線時每 5 秒重試
 /// - 每筆帶 App 產生的 client_id，重送時資料庫會忽略重複的那筆
-/// - 只傳籃框編號，隊伍由資料庫依換場狀態決定
+/// - 只傳籃框編號，隊伍與分數由資料庫依比賽模式、換場狀態決定
 class GoalReporter {
   GoalReporter(this._client, this._games);
 
@@ -91,7 +90,6 @@ class GoalReporter {
             'client_id': goal.clientId,
             'game_id': game.id,
             'hoop': goal.hoop,
-            'points': autoGoalPoints,
             'source': 'auto',
             'confidence': goal.confidence,
           },
