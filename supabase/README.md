@@ -16,6 +16,7 @@ supabase db push
 | `20261018000000_init_scoreboard.sql` | Phase 1：比賽、加分事件、比分、開新局、撤銷 |
 | `20261018010000_hoops_and_idempotency.sql` | 辨識端準備：`client_id`、籃框、信心度、換場對調 |
 | `20261022000000_game_mode.sql` | 比賽模式 `games.mode`（`full` 全場／`half` 半場）；`new_game` 沿用上一場的模式 |
+| `20261102000000_pending_goals.sql` | 半場自動進球待確認：`score_events.pending`、隊伍可空；自動進球沒帶分數時全場 2、半場 1；撤銷跳過待確認 |
 
 ## Schema
 

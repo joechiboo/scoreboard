@@ -247,6 +247,28 @@ button:active { background: var(--btn-active); transform: scale(0.96); }
 .bar button { flex: 1; font-size: clamp(0.95rem, 2.4vw, 1.4rem); padding: 0.6em 0; }
 
 
+.claim {
+  position: fixed;
+  left: 50%;
+  top: calc(16px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 32px));
+  background: var(--panel);
+  border: 2px solid #f5b83d;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+.claim[hidden] { display: none; }
+.claim p { margin: 0 0 10px; font-size: 1.1rem; text-align: center; }
+.claim small { display: block; color: var(--muted); font-size: 0.85rem; }
+.claim-buttons { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.claim-buttons button { font-size: 1.1rem; }
+.claim-a { background: color-mix(in srgb, var(--a) 45%, var(--btn)); }
+.claim-b { background: color-mix(in srgb, var(--b) 45%, var(--btn)); }
+.claim-buttons [data-claim-skip] { padding: 0.7em 1em; color: var(--muted); }
+
 .toast {
   position: fixed;
   left: 50%;

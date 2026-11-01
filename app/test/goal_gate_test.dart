@@ -22,10 +22,17 @@ void main() {
 
   test('籃框對應隊伍與資料庫 trigger 規則一致', () {
     LiveGame game(bool swapped) =>
-        LiveGame(id: 'g', teamAName: '主隊', teamBName: '客隊', sidesSwapped: swapped);
+        LiveGame(id: 'g', teamAName: '主隊', teamBName: '客隊', sidesSwapped: swapped, mode: 'full');
     expect(game(false).teamNameForHoop(1), '主隊');
     expect(game(false).teamNameForHoop(2), '客隊');
     expect(game(true).teamNameForHoop(1), '客隊');
     expect(game(true).teamNameForHoop(2), '主隊');
+    expect(game(false).autoPoints, 2);
+  });
+
+  test('半場沒有固定隊伍，自動進球 1 分', () {
+    final game = LiveGame(id: 'g', teamAName: '主隊', teamBName: '客隊', sidesSwapped: false, mode: 'half');
+    expect(game.teamNameForHoop(1), isNull);
+    expect(game.autoPoints, 1);
   });
 }

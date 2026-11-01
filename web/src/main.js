@@ -1,7 +1,7 @@
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
-  setScore, deleteGame, deleteGames, restoreEvents, setGameMode,
+  setScore, deleteGame, deleteGames, restoreEvents, setGameMode, getPendingGoals, assignGoal, dismissGoal,
 } from './api.js'
 import {
   groupByDay, standings, recordText, gameLine, gameTime, shareText, dayKey, isPlayed, isFinished, newestFirst,
@@ -28,6 +28,14 @@ app.innerHTML = `
       </section>
     `).join('')}
   </main>
+  <div class="claim" data-claim hidden>
+    <p><b data-claim-text>🏀 進球</b> 記給哪一隊？<small data-claim-more></small></p>
+    <div class="claim-buttons">
+      <button data-claim-team="A" class="claim-a">—</button>
+      <button data-claim-team="B" class="claim-b">—</button>
+      <button data-claim-skip>不算</button>
+    </div>
+  </div>
   <footer class="bar">
     <span class="status" data-status title="連線狀態"></span>
     <button data-action="undo">↶ 撤銷</button>
@@ -43,6 +51,7 @@ app.innerHTML = `
       <li><b>往上滑</b>：+1（例如三分球再補 1 分）</li>
       <li><b>往下滑</b>：−1（最低 0）</li>
       <li><b>全場／半場</b>按鈕：切換這場的模式，所有裝置一起換；開新局會沿用</li>
+      <li><b>半場自動進球</b>：上方跳出「記給哪一隊？」，點隊名才計分，看不清楚就按「不算」</li>
       <li><b>點隊名</b>：改這場的隊名</li>
       <li><b>撤銷</b>：取消最後一筆加減分</li>
       <li><b>開新局</b>：選下一場的兩隊，目前這場存進紀錄</li>
@@ -147,6 +156,20 @@ function paint() {
 function renderNames() {
   $('[data-name]', teamEl('A')).textContent = game?.team_a_name ?? '—'
   $('[data-name]', teamEl('B')).textContent = game?.team_b_name ?? '—'
+  $('[data-claim-team="A"]').textContent = game?.team_a_name ?? '—'
+  $('[data-claim-team="B"]').textContent = game?.team_b_name ?? '—'
+}
+
+// 半場：App 偵測到的進球先待確認，顯示最舊的一筆讓場邊選隊伍
+let claims = []
+
+function renderClaims(list) {
+  claims = list
+  const el = $('[data-claim]')
+  el.hidden = list.length === 0
+  if (!list.length) return
+  $('[data-claim-text]').textContent = `🏀 進球 +${list[0].points}`
+  $('[data-claim-more]').textContent = list.length > 1 ? `（還有 ${list.length - 1} 筆）` : ''
 }
 
 function renderMode() {
@@ -187,10 +210,11 @@ async function refresh() {
   if (!game) return
   const req = ++reqSeq
   const gameId = game.id
-  const score = await getScore(gameId)
+  const [score, pendingGoals] = await Promise.all([getScore(gameId), getPendingGoals(gameId)])
   if (req > renderedReq && gameId === game?.id) {
     renderedReq = req
     renderScore(score)
+    renderClaims(pendingGoals)
   }
 }
 
@@ -201,6 +225,7 @@ async function loadGame(g) {
   game = g
   renderNames()
   renderMode()
+  renderClaims([])
   if (!game) {
     toast('目前沒有進行中的比賽')
     return
@@ -618,6 +643,15 @@ app.addEventListener('click', async (e) => {
     openHistory()
   } else if (btn.dataset.action === 'mode') {
     toggleMode()
+  } else if (btn.dataset.claimTeam || 'claimSkip' in btn.dataset) {
+    const goal = claims[0]
+    if (!goal) return
+    const team = btn.dataset.claimTeam
+    run(async () => {
+      const rows = team ? await assignGoal(goal.id, team) : await dismissGoal(goal.id)
+      if (!rows.length) toast('這球已由其他裝置處理')
+      else if (team) toast(`${team === 'A' ? game.team_a_name : game.team_b_name} +${goal.points}`)
+    })
   }
 })
 

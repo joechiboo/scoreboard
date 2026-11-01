@@ -9,8 +9,5 @@ const supabaseKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_r32ZjBy2q2nbXrMZXSp2XA_7UAR_tVk',
 );
 
-/// 自動進球預設分數，Web 端可再改成 3 分或 1 分。
-const autoGoalPoints = 2;
-
 /// 判定進球後的冷卻時間，避免同一球重複計分。
 const goalCooldown = Duration(seconds: 2);

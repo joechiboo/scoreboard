@@ -38,6 +38,33 @@ export async function newGame(teamAName = '主隊', teamBName = '客隊') {
   )
 }
 
+// 半場時 App 偵測到、還沒選隊伍的進球（舊的在前）
+export async function getPendingGoals(gameId) {
+  return unwrap(
+    await supabase
+      .from('score_events')
+      .select('id, points, created_at')
+      .eq('game_id', gameId)
+      .eq('pending', true)
+      .eq('undone', false)
+      .order('id'),
+  )
+}
+
+// 把待確認的進球記給某隊。只更新仍待確認的那筆，兩台同時按時只有一台生效
+export async function assignGoal(id, team) {
+  return unwrap(
+    await supabase.from('score_events').update({ team, pending: false }).eq('id', id).eq('pending', true).select(),
+  )
+}
+
+// 待確認的進球判定為不算
+export async function dismissGoal(id) {
+  return unwrap(
+    await supabase.from('score_events').update({ undone: true }).eq('id', id).eq('pending', true).select(),
+  )
+}
+
 // 改目前這場的隊名（其他裝置透過 Realtime 跟著更新）
 export async function renameTeams(gameId, teamAName, teamBName) {
   return unwrap(
