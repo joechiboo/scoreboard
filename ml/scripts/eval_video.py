@@ -86,12 +86,14 @@ def main():
         h, w = first.shape[:2]
         writer = cv2.VideoWriter(str(args.out), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
-    events, ball, i, flash = [], None, 0, 0
+    events, ball, i, flash, t = [], None, 0, 0, 0.0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-        t = i / fps
+        # 手機錄影是可變幀率，用「第幾幀 ÷ 平均幀率」換算，15 分鐘的影片中段會差到 2 秒，
+        # 和播放器上看到的時間（人工標記）對不起來，所以直接讀這一幀的時間戳
+        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
         ball = detector.detect(frame, roi, prev=ball)
         motion = net.update(frame, ball) if cfg.use_net else None
         ev = goal.update(t, ball, motion)
@@ -118,7 +120,7 @@ def main():
         writer.release()
 
     preds = [e.t for e in events]
-    print(f"\n共 {i} 幀（{i / fps:.1f} 秒），判定進球 {len(preds)} 次")
+    print(f"\n共 {i} 幀（{t:.1f} 秒），判定進球 {len(preds)} 次")
     if args.labels:
         labels = load_labels(args.labels)
         pairs, false_pos, missed = match(preds, labels, args.tol)
