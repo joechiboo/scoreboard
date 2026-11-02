@@ -45,4 +45,6 @@ python scripts/export_tflite.py --model yolo11n.pt --imgsz 320 [--int8]
 pytest tests
 ```
 
+實拍影片放在 `datasets/videos/<日期>_<場次>/`，標記 CSV 跟影片同資料夾、同檔名。
+
 `*.pt`、`runs/`、`datasets/`、`*.mp4` 已被 `.gitignore` 排除，不進版控。
