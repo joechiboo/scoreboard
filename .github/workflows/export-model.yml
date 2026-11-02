@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install 'torch<2.15' torchvision --index-url https://download.pytorch.org/whl/cpu  # litert-torch 0.10 要求 torch<2.15
       - run: pip install ultralytics
       - name: Export
         working-directory: ml
