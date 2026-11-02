@@ -98,7 +98,8 @@
     <p class="help">
       <b>轉群組</b>：把縮圖拖到上面的欄，或游標指著縮圖按數字鍵。先點選多張可以一次轉，欄跟欄之間也能互轉，按 <kbd>0</kbd> 或拖回下面就回到待分類。<br>
       <b>排除路人</b>：群裡全是路人就按「整群排除」，只會動到待分類的，已分給球員的不受影響。排錯了按復原，或從路人欄拖回來。<br>
-      <b>找相似</b>：欄裡有圖就能按，列出最像的 30 張。點掉不對的，其餘一次轉進去。
+      <b>找相似</b>：欄裡有圖就能按，列出最像的 30 張。點掉不對的，其餘一次轉進去。<br>
+      <b>複查</b>：都分完後用，挑出最可能標錯或漏標的給你看。
     </p>
   </aside>
 </main>
@@ -106,6 +107,7 @@
 const POOL_LIMIT = 40;
 const BOARD_LIMIT = 120;
 const SIMILAR_PAGE = 30;
+const REVIEW_LIMIT = 30;
 const FLIGHT_LIMIT = 40;
 const OTHER = '路人';
 const state = {
@@ -113,6 +115,7 @@ const state = {
   selected: new Set(), anchor: null, hover: null, history: [],
   expanded: new Set(), foldedClusters: new Set(), foldedColumns: new Set(),
   candidates: null, // { group, crops, rejected }：有值時下方顯示找相似結果
+  review: null, // { group, conflicts, outliers, missed }：有值時下方顯示複查清單
 };
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -373,6 +376,12 @@ function renderBoard() {
       similar.title = members.length ? '' : '先轉幾張進來';
       similar.onclick = () => openCandidates(name);
       head.append(similar);
+      if (name !== OTHER) {
+        const review = el('button', '', '複查');
+        review.disabled = members.length === 0;
+        review.onclick = () => openReview(name);
+        head.append(review);
+      }
     }
     column.append(head);
 
@@ -454,6 +463,7 @@ async function openCandidates(group) {
     });
     if (!res.ok) throw new Error(res.status);
     state.candidates = { group, crops: await res.json(), rejected: new Set() };
+    state.review = null;
     setStatus('');
     render();
   } catch (e) {
@@ -520,11 +530,68 @@ function renderCandidates(root) {
   syncConfirm();
 }
 
+async function openReview(group) {
+  setStatus('複查…');
+  try {
+    const res = await fetch('/api/review', {
+      method: 'POST',
+      body: JSON.stringify({ group, labels: state.labels, limit: REVIEW_LIMIT }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    state.review = { group, ...(await res.json()) };
+    state.candidates = null;
+    setStatus('');
+    render();
+  } catch (e) {
+    setStatus('複查失敗，伺服器還開著嗎？', true);
+  }
+}
+
+function renderReview(root) {
+  const { group, conflicts, outliers, missed } = state.review;
+  const toolbar = el('div', 'toolbar');
+  const index = state.players.indexOf(group) + 1;
+  toolbar.append(
+    el('span', 'count', `複查 ${group}：不是這個人的按 ${groups().length} 轉路人，是別的球員就按那個人的數字鍵；路人裡其實是 ${group} 的按 ${index}`),
+    el('span', 'spacer'),
+  );
+  const close = el('button', '', '關閉');
+  close.onclick = () => {
+    state.review = null;
+    render();
+  };
+  toolbar.append(close);
+  root.append(toolbar);
+
+  // 轉走的從清單消失；清單本身不動，復原時才會再出現
+  const lists = [
+    ['同一張畫面出現兩次（至少有一張是錯的）', conflicts, (crop) => labelOf(crop) === group],
+    [`${group} 這組裡最不像的`, outliers, (crop) => labelOf(crop) === group],
+    [`路人裡最像 ${group} 的（可能漏標）`, missed, (crop) => labelOf(crop) !== group],
+  ];
+  for (const [title, crops, keep] of lists) {
+    const shown = crops.filter(keep);
+    if (!shown.length) continue;
+    const section = el('section');
+    const head = el('div', 'head');
+    head.append(el('h2', '', title), el('span', 'count', `${shown.length} 張`), el('span', 'spacer'));
+    const all = el('button', '', '全選');
+    all.onclick = () => {
+      shown.forEach((crop) => state.selected.add(crop));
+      syncSelection();
+    };
+    head.append(all);
+    section.append(head, makeGrid(shown.map((crop) => byCrop.get(crop))));
+    root.append(section);
+  }
+}
+
 function render() {
   renderBoard();
   const pool = $('pool');
   pool.replaceChildren();
-  if (state.candidates) renderCandidates(pool);
+  if (state.review) renderReview(pool);
+  else if (state.candidates) renderCandidates(pool);
   else renderClusters(pool);
   $('undoBtn').disabled = state.history.length === 0;
   syncSelection();

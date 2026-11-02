@@ -52,6 +52,32 @@ def rank_similar(records: list[dict], X, labels: dict, group: str, limit: int) -
     return result
 
 
+def review_group(records: list[dict], X, labels: dict, group: str, limit: int) -> dict:
+    """挑出 group 最可能標錯的：同畫面重複、組內最不像的、路人裡最像這個人的。"""
+    crops = labels["crops"]
+    members = [i for i, r in enumerate(records) if crops.get(r["crop"]) == group]
+    if not members:
+        return {"conflicts": [], "outliers": [], "missed": []}
+
+    by_frame = {}
+    for i in members:
+        by_frame.setdefault(records[i]["frame"], []).append(records[i]["crop"])
+    conflicts = [crop for same in by_frame.values() if len(same) > 1 for crop in same]
+
+    sim = X[members] @ X[members].T
+    np.fill_diagonal(sim, -1)
+    closeness = np.sort(sim, axis=1)[:, -5:].mean(1)
+    order = np.argsort(closeness)
+    outliers = [records[members[i]]["crop"] for i in order if records[members[i]]["crop"] not in conflicts][:limit]
+
+    # 只拿組內最集中的一半當樣本，免得被標錯的那幾張帶偏
+    core = [members[i] for i in order[len(order) // 2:]]
+    others = [i for i, r in enumerate(records) if crops.get(r["crop"]) in (None, OTHER)]
+    score = np.sort(X[others] @ X[core].T, axis=1)[:, -3:].mean(1)
+    missed = [records[others[i]]["crop"] for i in np.argsort(-score)[:limit]]
+    return {"conflicts": conflicts, "outliers": outliers, "missed": missed}
+
+
 def make_handler(root: Path, players: list[str]):
     labels_path = root / "labels.json"
     records = json.loads((root / "people.json").read_text(encoding="utf-8"))
@@ -100,6 +126,10 @@ def make_handler(root: Path, players: list[str]):
             if self.path == "/api/similar":
                 crops = rank_similar(records, X, body["labels"], body["group"], body["limit"])
                 self.send_body(json.dumps(crops, ensure_ascii=False).encode("utf-8"), "application/json")
+                return
+            if self.path == "/api/review":
+                lists = review_group(records, X, body["labels"], body["group"], body["limit"])
+                self.send_body(json.dumps(lists, ensure_ascii=False).encode("utf-8"), "application/json")
                 return
             if self.path != "/api/labels":
                 self.send_body(b"not found", "text/plain", 404)
