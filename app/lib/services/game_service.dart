@@ -62,6 +62,12 @@ class GameService {
     return current;
   }
 
+  /// 切換這場的全場／半場，所有裝置一起換（與網頁的按鈕相同）。
+  Future<void> setMode(String gameId, String mode) async {
+    await _client.from('games').update({'mode': mode}).eq('id', gameId);
+    await fetch();
+  }
+
   void start() {
     _channel ??= _client
         .channel('detector:games')

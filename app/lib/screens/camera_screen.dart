@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../services/ball_detector.dart';
 import '../services/game_service.dart';
 import '../services/goal_gate.dart';
+import '../services/goal_pipeline.dart';
 import '../services/goal_reporter.dart';
 import '../services/settings.dart';
+import '../services/vision.dart';
+import '../widgets/rim_hint.dart';
 import '../widgets/rim_selector.dart';
 
-/// 鏡頭畫面：框選籃框、偵測進球（目前以「模擬進球」按鈕代替 YOLO）。
+/// 鏡頭畫面：框選籃框、即時找球與判定進球。「模擬進球」按鈕留著測計分那條路。
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key, required this.settings, required this.games, required this.reporter});
 
@@ -27,6 +31,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   late Rect? _rim = widget.settings.rimBox;
   late bool _editing = _rim == null;
   final _gate = GoalGate();
+  BallDetector? _detector;
+  GoalPipeline? _pipeline;
+  bool _streaming = false;
+  bool _showHint = true;
+  final _status = ValueNotifier<PipelineStatus?>(null);
 
   @override
   void initState() {
@@ -42,16 +51,74 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       final cams = await availableCameras();
       final back = cams.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => cams.first);
-      final controller = CameraController(back, ResolutionPreset.high, enableAudio: false);
+      final controller = CameraController(
+        back,
+        ResolutionPreset.veryHigh,
+        enableAudio: false,
+        fps: 30,
+        imageFormatGroup: ImageFormatGroup.yuv420,
+      );
       await controller.initialize();
       if (!mounted) {
         await controller.dispose();
         return;
       }
       setState(() => _camera = controller);
+      await _syncDetection();
     } catch (e) {
       setState(() => _error = '無法開啟鏡頭：$e');
     }
+  }
+
+  /// 框好籃框才開始偵測；編輯中或沒有籃框時停下來。
+  Future<void> _syncDetection() async {
+    final cam = _camera;
+    final rim = _rim;
+    if (cam == null) return;
+    final want = !_editing && rim != null;
+    if (want == _streaming) return;
+    if (!want) {
+      _streaming = false;
+      _pipeline = null;
+      _status.value = null;
+      await cam.stopImageStream();
+      return;
+    }
+    try {
+      _detector ??= await BallDetector.start();
+    } catch (e) {
+      if (mounted) setState(() => _error = '模型載入失敗：$e');
+      return;
+    }
+    if (!mounted || _camera != cam) return;
+    final pipeline = GoalPipeline(
+      rimNorm: rim,
+      detector: _detector!,
+      onGoal: (ev) {
+        if (mounted) _onGoal(confidence: ev.confidence);
+      },
+      onStatus: (s) => _status.value = s,
+    );
+    _pipeline = pipeline;
+    _streaming = true;
+    await cam.startImageStream((image) {
+      final p = _pipeline;
+      if (p == null || image.planes.length < 3) return;
+      final uv = image.planes[1];
+      p.onFrame(
+        YuvFrame(
+          width: image.width,
+          height: image.height,
+          y: image.planes[0].bytes,
+          yStride: image.planes[0].bytesPerRow,
+          u: uv.bytes,
+          v: image.planes[2].bytes,
+          uvStride: uv.bytesPerRow,
+          uvPixelStride: uv.bytesPerPixel ?? 1,
+        ),
+        upsideDown: cam.value.deviceOrientation == DeviceOrientation.landscapeRight,
+      );
+    });
   }
 
   @override
@@ -59,6 +126,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final cam = _camera;
     if (state == AppLifecycleState.inactive && cam != null) {
       _camera = null;
+      _streaming = false;
+      _pipeline = null;
       cam.dispose();
     } else if (state == AppLifecycleState.resumed && _camera == null) {
       _initCamera();
@@ -68,7 +137,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pipeline = null;
     _camera?.dispose();
+    _detector?.dispose();
+    _status.dispose();
     WakelockPlus.disable();
     SystemChrome.setPreferredOrientations([]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -89,8 +161,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final text = game == null
         ? '進球！'
         : team == null
-            ? '進球 +${game.autoPoints}，請在計分板選隊伍'
-            : '進球！$team +${game.autoPoints}';
+        ? '進球 +${game.autoPoints}，請在計分板選隊伍'
+        : '進球！$team +${game.autoPoints}';
     messenger.showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 1)));
   }
 
@@ -105,24 +177,43 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             child: _error != null
                 ? Text(_error!, style: const TextStyle(color: Colors.white))
                 : cam == null
-                    ? const CircularProgressIndicator()
-                    : AspectRatio(
-                        aspectRatio: cam.value.aspectRatio,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CameraPreview(cam),
-                            RimSelector(
-                              rim: _rim,
-                              editing: _editing,
-                              onChanged: (r) => setState(() => widget.settings.rimBox = _rim = r),
-                            ),
-                          ],
+                ? const CircularProgressIndicator()
+                : AspectRatio(
+                    aspectRatio: cam.value.aspectRatio,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CameraPreview(cam),
+                        RimSelector(
+                          rim: _rim,
+                          editing: _editing,
+                          onChanged: (r) => setState(() => widget.settings.rimBox = _rim = r),
                         ),
-                      ),
+                        IgnorePointer(
+                          child: ValueListenableBuilder<PipelineStatus?>(
+                            valueListenable: _status,
+                            builder: (_, s, _) => CustomPaint(painter: _BallPainter(s?.ball)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
           SafeArea(child: _topBar()),
-          SafeArea(child: Align(alignment: Alignment.bottomCenter, child: _bottomBar())),
+          if (_editing && _showHint && cam != null)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  // 上下留給返回鍵和完成鍵，不要蓋住
+                  padding: const EdgeInsets.fromLTRB(12, 60, 12, 64),
+                  child: RimHint(onClose: () => setState(() => _showHint = false)),
+                ),
+              ),
+            ),
+          SafeArea(
+            child: Align(alignment: Alignment.bottomCenter, child: _bottomBar()),
+          ),
         ],
       ),
     );
@@ -136,20 +227,34 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         children: [
           IconButton.filledTonal(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
           const SizedBox(width: 12),
-          StreamBuilder<LiveGame?>(
-            stream: widget.games.stream,
-            initialData: widget.games.current,
-            builder: (_, snap) => _chip(
-              snap.data?.isHalfCourt ?? false
-                  ? '半場：進球在計分板選隊伍'
-                  : '$hoop 號籃框 → ${snap.data?.teamNameForHoop(hoop) ?? '—'}',
+          Flexible(
+            child: StreamBuilder<LiveGame?>(
+              stream: widget.games.stream,
+              initialData: widget.games.current,
+              builder: (_, snap) => _chip(
+                snap.data?.isHalfCourt ?? false
+                    ? '半場：進球在計分板選隊伍'
+                    : '$hoop 號籃框 → ${snap.data?.teamNameForHoop(hoop) ?? '—'}',
+              ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           StreamBuilder<int>(
             stream: widget.reporter.pendingCount,
             initialData: widget.reporter.pending,
             builder: (_, snap) => (snap.data ?? 0) > 0 ? _chip('${snap.data} 筆待上傳', warn: true) : const SizedBox(),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: ValueListenableBuilder<PipelineStatus?>(
+            valueListenable: _status,
+            builder: (_, s, _) => s == null
+                ? const SizedBox()
+                : _chip(
+                    '找球 ${s.fps.toStringAsFixed(0)} fps · ${s.backend} ${s.inferenceMs}+${s.prepareMs} ms · '
+                    '${s.frameSize.width.toInt()}×${s.frameSize.height.toInt()} · 網 ${s.netMotion.toStringAsFixed(3)}',
+                  ),
+            ),
           ),
         ],
       ),
@@ -162,38 +267,72 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (!_editing && (_rim?.width ?? 1) < minRimWidth) ...[
+            Flexible(child: _chip('籃框太小，容易漏判：手機架近一點再重新框選', warn: true)),
+            const SizedBox(width: 12),
+          ],
           if (_editing)
             _chip(_rim == null ? '在畫面上拖一個框，框住籃框' : '可以重新拖曳，好了按完成')
           else
             FilledButton.tonalIcon(
               icon: const Icon(Icons.crop_free),
               label: const Text('重新框選'),
-              onPressed: () => setState(() => _editing = true),
+              onPressed: () {
+                setState(() {
+                  _editing = true;
+                  _showHint = true;
+                });
+                _syncDetection();
+              },
             ),
           const SizedBox(width: 12),
           if (_editing)
             FilledButton(
-              onPressed: _rim == null ? null : () => setState(() => _editing = false),
+              onPressed: _rim == null
+                  ? null
+                  : () {
+                      setState(() => _editing = false);
+                      _syncDetection();
+                    },
               child: const Text('完成'),
             )
           else
-            // YOLO 接上前，用按鈕模擬偵測到進球
-            FilledButton.icon(
-              icon: const Icon(Icons.sports_basketball),
-              label: const Text('模擬進球'),
-              onPressed: _onGoal,
-            ),
+            FilledButton.icon(icon: const Icon(Icons.sports_basketball), label: const Text('模擬進球'), onPressed: _onGoal),
         ],
       ),
     );
   }
 
   Widget _chip(String text, {bool warn = false}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: (warn ? Colors.orange.shade900 : Colors.black).withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(text, style: const TextStyle(color: Colors.white)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: (warn ? Colors.orange.shade900 : Colors.black).withValues(alpha: 0.6),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white)),
+  );
+}
+
+/// 畫出目前偵測到的球，確認座標有對齊。
+class _BallPainter extends CustomPainter {
+  _BallPainter(this.ball);
+
+  final Offset? ball;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final b = ball;
+    if (b == null) return;
+    canvas.drawCircle(
+      Offset(b.dx * size.width, b.dy * size.height),
+      14,
+      Paint()
+        ..color = Colors.yellowAccent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BallPainter old) => old.ball != ball;
 }
