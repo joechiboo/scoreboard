@@ -1,0 +1,31 @@
+name: Export YOLO to TFLite
+
+# Ultralytics 的 LiteRT 轉檔只支援 Linux x86 和 macOS，Windows 本機轉不了。
+# 手動觸發：gh workflow run export-model.yml；轉好的模型放在 artifact，下載後放到 app/assets/。
+on:
+  workflow_dispatch:
+    inputs:
+      imgsz:
+        description: 模型輸入尺寸
+        default: '320'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install ultralytics
+      - name: Export
+        working-directory: ml
+        run: python scripts/export_tflite.py --model yolo11n.pt --imgsz ${{ inputs.imgsz }}
+      - name: Show model files
+        run: find ml -name '*.tflite' -exec ls -la {} \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yolo-tflite
+          path: ml/**/*.tflite
+          if-no-files-found: error
