@@ -5,10 +5,13 @@
    且上下兩點連線穿過框的位置落在框內（球太快、中間幀沒拍到也能判定）。
 2. 大小：穿越時球的直徑 / 框寬 要接近真實比例（籃球 24cm / 籃框 45cm ≈ 0.53）。
    麵包球從框前面掉下時球看起來較大，從後面掉下時較小，藉此排除。
-3. 籃網晃動：穿越後 net_window_s 內籃網區域要有明顯變化（net_motion 由呼叫端計算）。
+3. 籃網晃動：從球在框上方起，到穿越後 net_window_s 內，籃網區域要有明顯變化
+   （net_motion 由呼叫端計算）。球在網裡時常被網子擋住偵測不到，
+   籃網晃最大的時候往往在球從網下出現之前，所以要往回看。
 判定後冷卻 cooldown_s，避免同一球重複計分。
 """
 
+from collections import deque
 from dataclasses import dataclass
 
 from .geometry import Ball, Box
@@ -54,6 +57,7 @@ class GoalDetector:
         self._last_above: tuple[float, Ball] | None = None
         self._pending: _Pending | None = None
         self._cooldown_until = float("-inf")
+        self._motion_hist: deque[tuple[float, float]] = deque()  # (t, net_motion)
 
     # ---------- 區域判斷 ----------
 
@@ -93,6 +97,10 @@ class GoalDetector:
         """每一幀呼叫一次。ball 為該幀偵測到的球（沒偵測到傳 None），
         net_motion 為籃網區域的變化量 0～1（不使用籃網確認時可省略）。
         回傳確認的進球事件，否則 None。"""
+        if net_motion is not None:
+            self._motion_hist.append((t, net_motion))
+            while self._motion_hist and self._motion_hist[0][0] < t - self.cfg.max_transit_s:
+                self._motion_hist.popleft()
         confirmed = self._update_pending(t, net_motion)
 
         if ball is not None and t >= self._cooldown_until and self._pending is None:
@@ -111,7 +119,10 @@ class GoalDetector:
                             net_motion=None,
                         )
                         if self.cfg.use_net:
-                            self._pending = _Pending(event, deadline=t + self.cfg.net_window_s)
+                            since_above = [m for tt, m in self._motion_hist if tt >= t_above]
+                            self._pending = _Pending(
+                                event, deadline=t + self.cfg.net_window_s, peak_motion=max(since_above, default=0.0)
+                            )
                             confirmed = confirmed or self._update_pending(t, net_motion)
                         else:
                             confirmed = self._confirm(event, t)

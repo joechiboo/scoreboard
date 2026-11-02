@@ -112,3 +112,34 @@ def test_rolls_around_rim_then_drops_in():
     # 上方 → 碰框彈高 → 再從框內掉下
     wp = [(280, 40), (390, 200), (360, 150), (350, 205), (350, 330)]
     assert len(run(path(wp, 1.0))) == 1
+
+
+def test_net_shakes_while_ball_hidden_in_net():
+    # 實拍：球在網裡偵測不到、籃網此時晃最大；球從網下出現時網已經不晃了
+    det = GoalDetector(RIM)
+    frames = [(0.0, Ball(350, 120, BALL_D, BALL_D)), (0.1, Ball(350, 170, BALL_D, BALL_D))]
+    frames += [(0.1 + i / FPS, None) for i in range(1, 10)]  # 穿網中，看不到球
+    frames += [(0.5, Ball(352, 300, BALL_D, BALL_D))]
+    events = []
+    for t, ball in frames:
+        shaking = 0.15 < t < 0.45
+        ev = det.update(t, ball, 0.1 if shaking else 0.0)
+        if ev:
+            events.append(ev)
+    for i in range(1, 30):
+        ev = det.update(0.5 + i / FPS, None, 0.0)
+        if ev:
+            events.append(ev)
+    assert len(events) == 1
+    assert events[0].net_motion == pytest.approx(0.1)
+
+
+def test_net_shake_before_shot_does_not_count():
+    # 出手前籃網就在晃（上一球的餘震），球再從框上方進來時不算數
+    det = GoalDetector(RIM)
+    det.update(0.0, None, 0.2)
+    det.update(0.05, None, 0.0)
+    frames = [(1.0, Ball(350, 150, BALL_D, BALL_D)), (1.3, Ball(350, 300, BALL_D, BALL_D))]
+    events = [e for t, b in frames if (e := det.update(t, b, 0.0))]
+    events += [e for i in range(1, 30) if (e := det.update(1.3 + i / FPS, None, 0.0))]
+    assert events == []
