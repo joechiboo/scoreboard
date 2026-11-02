@@ -44,6 +44,18 @@ python scripts/people_label.py 2026-10-30_half --players 甲,乙,丙
 
 人框、畫面和指認結果都在 `datasets/people/<場次>/`，不進版控；伺服器只綁 `127.0.0.1`。
 
+## 剪精華
+
+對每顆進球追球和人，看對照圖確認誰傳誰投，寫成 `plan.json` 後剪片。誰傳誰投要人工確認，自動判斷不可靠。
+
+```bash
+python scripts/highlight_track.py datasets/videos/2026-10-30_half/clip.mp4 805.6
+python scripts/highlight_zoom.py datasets/videos/2026-10-30_half/clip.mp4 805.6 --range=-3.6,-1.3 --out zoom.jpg
+python scripts/highlight_render.py datasets/highlights/2026-10-30_half/plan.json --out 精華.mp4
+```
+
+`plan.json` 的格式見 `highlight_render.py` 開頭。計畫、追蹤結果和成品都在 `datasets/highlights/<場次>/`，不進版控。
+
 ## 轉成 TFLite（給 app/）
 
 ```bash
