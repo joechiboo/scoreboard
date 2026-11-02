@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2, numpy as np
 S = Path(sys.argv[1]); D = Path(r"D:/Personal/Project/scoreboard/ml/datasets/videos/2026-10-30_half")
 RX1, RY1, RX2, RY2 = 1763, 623, 1866, 640
-tiles, rows = [], []
+tiles, rows, hits = [], [], []
 for jf in sorted((S / "shooter").glob("*.json")):
     clip, tg = jf.stem.rsplit("_", 1); tg = float(tg)
     fr = json.loads(jf.read_text())
@@ -44,6 +44,7 @@ for jf in sorted((S / "shooter").glob("*.json")):
     rows.append((clip, tg, f"找到人（追 {fly:.1f} 秒、{pts} 點，畫面 {n_people} 人）", tr))
     cap = cv2.VideoCapture(str(D / (clip + ".mp4"))); cap.set(cv2.CAP_PROP_POS_MSEC, hit[0] * 1000); ok, f = cap.read()
     p = hit[1]; x1, y1, x2, y2 = p[1:5]
+    hits.append({"clip": clip, "goal": tg, "t": hit[0], "box": [x1, y1, x2, y2]})
     cv2.rectangle(f, (x1, y1), (x2, y2), (0, 255, 0), 5); cv2.circle(f, (int(hit[2][0]), int(hit[2][1])), 34, (0, 255, 255), 5)
     for k in range(1, len(tr)): cv2.line(f, (int(tr[k-1][1]), int(tr[k-1][2])), (int(tr[k][1]), int(tr[k][2])), (0, 165, 255), 3)
     th = cv2.resize(f, (640, 360), interpolation=cv2.INTER_AREA)
@@ -54,4 +55,5 @@ ok = sum(r[2].startswith("找到") for r in rows); print(f"找到人 {ok}/{len(r
 for k in range(0, len(tiles), 9):
     g = tiles[k:k + 9]; g += [np.zeros_like(tiles[0])] * ((3 - len(g) % 3) % 3)
     cv2.imwrite(str(S / f"shooter_sheet_{k // 9}.jpg"), np.vstack([np.hstack(g[a:a + 3]) for a in range(0, len(g), 3)]))
+(S / "hits.json").write_text(json.dumps(hits))
 print("sheets", (len(tiles) + 8) // 9)
