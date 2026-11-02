@@ -18,32 +18,34 @@ import numpy as np
 
 ML_ROOT = Path(__file__).resolve().parents[1]
 PAGE = Path(__file__).with_name("people_label.html")
+OTHER = "路人"
 
 
-def rank_similar(records: list[dict], X, labels: dict, player: str, limit: int) -> list[str]:
-    """還沒指定的人框裡，最像 player 已確認那幾張的排前面。回傳 crop 檔名。"""
+def rank_similar(records: list[dict], X, labels: dict, group: str, limit: int) -> list[str]:
+    """還沒分類的人框裡，最像 group 已有那幾張的排前面。回傳 crop 檔名。"""
     resolved = [labels["crops"].get(r["crop"]) for r in records]
-    positives = [i for i, name in enumerate(resolved) if name == player]
+    positives = [i for i, name in enumerate(resolved) if name == group]
     if not positives:
         return []
-    rejected = set(labels.get("not", {}).get(player, []))
+    rejected = set(labels.get("not", {}).get(group, []))
     negatives = [
         i for i, r in enumerate(records)
-        if r["crop"] in rejected or resolved[i] not in (None, player)
+        if r["crop"] in rejected or resolved[i] not in (None, group)
     ]
-    # 取最像的幾張平均，同一個人正面、背面差很多，不能跟全部比
-    top = min(3, len(positives))
+    # 同一個人正面、背面差很多，取最像的幾張平均；路人是一群穿著不同的人，只看最像的一張
+    top = 1 if group == OTHER else min(3, len(positives))
     score = np.sort(X @ X[positives].T, axis=1)[:, -top:].mean(1)
     if negatives:
         score -= 0.5 * (X @ X[negatives].T).max(1)
 
-    # 同一張畫面裡一個人只會出現一次
-    used_frames = {records[i]["frame"] for i in positives}
+    # 同一張畫面裡一個人只會出現一次；路人不只一個，不適用
+    used_frames = {records[i]["frame"] for i in positives} if group != OTHER else set()
     result = []
     for i in np.argsort(-score):
         r = records[i]
         if resolved[i] is None and r["crop"] not in rejected and r["frame"] not in used_frames:
-            used_frames.add(r["frame"])
+            if group != OTHER:
+                used_frames.add(r["frame"])
             result.append(r["crop"])
             if len(result) == limit:
                 break
@@ -96,7 +98,7 @@ def make_handler(root: Path, players: list[str]):
         def do_POST(self) -> None:
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/api/similar":
-                crops = rank_similar(records, X, body["labels"], body["player"], body["limit"])
+                crops = rank_similar(records, X, body["labels"], body["group"], body["limit"])
                 self.send_body(json.dumps(crops, ensure_ascii=False).encode("utf-8"), "application/json")
                 return
             if self.path != "/api/labels":

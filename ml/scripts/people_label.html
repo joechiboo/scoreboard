@@ -10,85 +10,128 @@
     color-scheme: dark;
     --bg: #14161a; --panel: #1e2127; --line: #333842; --text: #e8eaed; --muted: #9aa1ac;
     --p0: #4ea1ff; --p1: #ffb020; --p2: #3ddc97; --p3: #e06cd8; --p4: #ff7a6b;
-    --other: #7d8590;
+    --other: #7d8590; --danger: #ff7a6b;
+    --stick: 0px;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif; }
-  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
-  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
-  button:hover { border-color: var(--muted); }
+  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
   button:disabled { opacity: .45; cursor: default; }
   .primary { background: var(--text); color: #111; border-color: var(--text); font-weight: 600; }
-  .brush { --c: var(--other); border-color: var(--c); }
-  .brush[aria-pressed="true"] { background: var(--c); color: #111; font-weight: 600; }
-  kbd { font: 11px Consolas, monospace; opacity: .75; margin-left: 4px; }
+  kbd { font: 11px Consolas, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+  #top { position: sticky; top: 0; z-index: 3; background: var(--bg); border-bottom: 1px solid var(--line); }
+  header { background: var(--panel); padding: 8px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+  #selection { font-weight: 600; }
   #status { color: var(--muted); margin-left: auto; text-align: right; }
-  #status.error { color: var(--p4); font-weight: 600; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; padding: 16px; align-items: start; }
-  #preview { position: sticky; top: 68px; }
+  #status.error { color: var(--danger); font-weight: 600; }
+
+  #board { display: flex; gap: 8px; padding: 8px 16px; }
+  .column { --c: var(--other); flex: 1 1 0; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 6px; padding: 6px 8px; }
+  .column.collapsed { flex: 0 0 auto; }
+  .column.drop, #pool.drop { outline: 2px solid var(--text); outline-offset: 1px; }
+  .column-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .column-head h2 { font-size: 14px; margin: 0; font-weight: 600; color: var(--c); }
+  .count { color: var(--muted); }
+  .spacer { flex: 1; }
+  .move { display: none; }
+  .has-selection .move { display: inline-block; }
+  .column .grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); max-height: 178px; overflow-y: auto; margin-top: 6px; }
+  .more { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .fold { padding: 0 7px; color: var(--muted); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 16px; padding: 12px 16px; align-items: start; }
+  #preview { position: sticky; top: calc(var(--stick) + 12px); }
   #frame { position: relative; background: #000; border-radius: 6px; overflow: hidden; aspect-ratio: 16 / 9; }
   #frame img { width: 100%; display: block; }
   #frame img:not([src]) { display: none; }
   #box { position: absolute; border: 2px solid #fff; outline: 2px solid #000; display: none; }
-  #caption, .help, .tally { color: var(--muted); margin: 8px 0 0; }
-  .tally b { color: var(--text); font-weight: 600; }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-  section h2 { font-size: 14px; margin: 0; font-weight: 600; }
-  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .count { color: var(--muted); }
-  .spacer { flex: 1; }
+  #caption, .help { color: var(--muted); margin: 8px 0 0; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  #pool section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  #pool h2 { font-size: 14px; margin: 0; font-weight: 600; }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #pool .grid { margin-top: 10px; }
+
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
-  .tile { --c: transparent; position: relative; padding: 0; border: 3px solid var(--c); border-radius: 6px; overflow: hidden; background: #000; aspect-ratio: 1 / 2; }
-  .tile:hover, .tile:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
-  .tile img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .tile { position: relative; padding: 0; border: 3px solid transparent; border-radius: 6px; overflow: hidden; background: #000; aspect-ratio: 1 / 2; cursor: grab; }
+  .tile:hover, .tile:focus-visible { border-color: var(--muted); }
+  .tile img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
   .tile span { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .75); font-size: 11px; line-height: 1.5; color: #fff; }
+  .tile.selected { border-color: #fff; }
+  .tile.selected::before { content: "✓"; position: absolute; z-index: 1; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; color: #111; font-size: 12px; line-height: 18px; font-weight: 700; }
   .tile.rejected img { opacity: .25; }
-  .tile.rejected::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 36px; color: var(--p4); }
+  .tile.rejected::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 36px; color: var(--danger); }
+
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-group(*) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+
   @media (max-width: 900px) {
+    #top { position: static; }
+    #board { flex-wrap: wrap; }
+    .column { flex: 1 1 40%; }
     main { grid-template-columns: 1fr; }
     #preview { position: static; order: -1; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title">球員指認</h1>
-  <div id="brushes" style="display:contents"></div>
-  <button id="similarBtn">找相似</button>
-  <button id="backBtn" hidden>回到全部的群</button>
-  <span id="status" role="status"></span>
-</header>
+<div id="top">
+  <header>
+    <h1 id="title">球員指認</h1>
+    <span id="selection"></span>
+    <button id="clearBtn" hidden>取消選取 <kbd>Esc</kbd></button>
+    <button id="undoBtn" disabled>復原 <kbd>Ctrl+Z</kbd></button>
+    <span id="status" role="status"></span>
+  </header>
+  <div id="board"></div>
+</div>
 <main>
-  <div id="content"></div>
+  <div id="pool"></div>
   <aside id="preview">
     <div id="frame"><img id="frameImg" alt="縮圖所在的整張畫面"><div id="box"></div></div>
     <p id="caption">游標移到縮圖上，這裡會顯示當時的整張畫面。</p>
-    <p class="tally" id="tally"></p>
     <p class="help">
-      1. 上方選一個人（或按數字鍵），在下面點幾張確定是這個人的縮圖。<br>
-      2. 按「找相似」，點掉不是這個人的（打 ✕），再按「其餘都是」，下一頁會照你的回饋重排。<br>
-      3. 一頁裡幾乎都不是了就可以停，換下一個人。路人不用指定。<br>
-      點錯了再點一次同一張會清掉。分群只是方便找到第一張，同一群可能混到不同人。
+      <b>轉群組</b>：把縮圖拖到上面的欄，或游標指著縮圖按數字鍵。先點選多張可以一次轉，欄跟欄之間也能互轉，按 <kbd>0</kbd> 或拖回下面就回到待分類。<br>
+      <b>排除路人</b>：群裡全是路人就按「整群排除」，只會動到待分類的，已分給球員的不受影響。排錯了按復原，或從路人欄拖回來。<br>
+      <b>找相似</b>：欄裡有圖就能按，列出最像的 30 張。點掉不對的，其餘一次轉進去。
     </p>
   </aside>
 </main>
 <script>
-const PREVIEW_LIMIT = 40;
+const POOL_LIMIT = 40;
+const BOARD_LIMIT = 120;
 const SIMILAR_PAGE = 30;
+const FLIGHT_LIMIT = 40;
 const OTHER = '路人';
 const state = {
-  session: '', players: [], people: [], labels: { crops: {}, not: {} }, brush: null, expanded: new Set(),
-  similar: null, // { player, crops, rejected }：有值時顯示找相似頁
+  session: '', players: [], people: [], labels: { crops: {}, not: {} },
+  selected: new Set(), anchor: null, hover: null, history: [],
+  expanded: new Set(), foldedClusters: new Set(), foldedColumns: new Set(),
+  candidates: null, // { group, crops, rejected }：有值時下方顯示找相似結果
 };
 const $ = (id) => document.getElementById(id);
+const el = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+let byCrop = new Map();
+let shuffled = [];
 
+const groups = () => [...state.players, OTHER];
 const colorOf = (name) => {
   const i = state.players.indexOf(name);
   return i >= 0 ? `var(--p${i % 5})` : 'var(--other)';
 };
-const labelOf = (p) => state.labels.crops[p.crop] ?? null;
+const labelOf = (crop) => state.labels.crops[crop] ?? null;
 const fmtTime = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+const tileOf = (crop) => document.querySelector(`.tile[data-crop="${CSS.escape(crop)}"]`);
 
 function setStatus(text, isError = false) {
   $('status').textContent = text;
@@ -112,171 +155,315 @@ function save() {
   saveTimer = setTimeout(postLabels, 200);
 }
 
-function renderBrushes() {
-  const box = $('brushes');
-  box.replaceChildren();
-  [...state.players, OTHER].forEach((name, i) => {
-    const b = document.createElement('button');
-    b.className = 'brush';
-    b.style.setProperty('--c', colorOf(name));
-    b.setAttribute('aria-pressed', state.brush === name);
-    b.append(name);
-    const k = document.createElement('kbd');
-    k.textContent = i + 1;
-    b.append(k);
-    b.onclick = () => setBrush(name);
-    box.append(b);
+// 收合狀態只是這台瀏覽器的方便，拿不到就當全部展開
+const foldKey = () => `people-label:${state.session}:folds`;
+function loadFolds() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(foldKey()) || '{}');
+    state.foldedClusters = new Set(saved.clusters || []);
+    state.foldedColumns = new Set(saved.columns || []);
+  } catch (e) { /* 用預設 */ }
+}
+function saveFolds() {
+  try {
+    localStorage.setItem(foldKey(), JSON.stringify({
+      clusters: [...state.foldedClusters], columns: [...state.foldedColumns],
+    }));
+  } catch (e) { /* 下次重新展開而已 */ }
+}
+
+// 轉群組時縮圖飛到新位置；瀏覽器不支援或使用者關閉動畫就直接換
+function withFlight(crops, update) {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!document.startViewTransition || reduced) {
+    update();
+    return;
+  }
+  const flying = crops.slice(0, FLIGHT_LIMIT);
+  const tag = () => flying.forEach((crop, i) => {
+    const tile = tileOf(crop);
+    if (tile) tile.style.viewTransitionName = `fly-${i}`;
+  });
+  tag();
+  const transition = document.startViewTransition(() => {
+    update();
+    tag();
+  });
+  transition.ready.catch(() => {});
+  transition.finished.finally(() => flying.forEach((crop) => {
+    const tile = tileOf(crop);
+    if (tile) tile.style.viewTransitionName = '';
+  }));
+}
+
+function moveCrops(crops, group) {
+  const changes = crops
+    .filter((crop) => labelOf(crop) !== group)
+    .map((crop) => ({ crop, prev: labelOf(crop) }));
+  if (!changes.length) return;
+  const moved = changes.map((c) => c.crop);
+  for (const crop of moved) {
+    // 先刪再加，新轉入的排到欄的最前面
+    delete state.labels.crops[crop];
+    if (group) {
+      state.labels.crops[crop] = group;
+      const rejected = state.labels.not[group];
+      if (rejected?.includes(crop)) rejected.splice(rejected.indexOf(crop), 1);
+    }
+    state.selected.delete(crop);
+  }
+  if (state.candidates) {
+    state.candidates.crops = state.candidates.crops.filter((crop) => !moved.includes(crop));
+    moved.forEach((crop) => state.candidates.rejected.delete(crop));
+  }
+  state.history.push(changes);
+  state.hover = null;
+  withFlight(moved, render);
+  save();
+}
+
+function undo() {
+  const changes = state.history.pop();
+  if (!changes) return;
+  for (const { crop, prev } of changes) {
+    delete state.labels.crops[crop];
+    if (prev) state.labels.crops[crop] = prev;
+  }
+  state.candidates = null;
+  withFlight(changes.map((c) => c.crop), render);
+  save();
+}
+
+function syncSelection() {
+  const n = state.selected.size;
+  document.body.classList.toggle('has-selection', n > 0);
+  $('selection').textContent = n ? `已選 ${n} 張，按數字鍵或拖到上面的欄` : '';
+  $('clearBtn').hidden = n === 0;
+  document.querySelectorAll('.tile').forEach((tile) => {
+    const on = state.selected.has(tile.dataset.crop);
+    tile.classList.toggle('selected', on);
+    tile.setAttribute('aria-pressed', on);
   });
 }
 
-function setBrush(name) {
-  state.brush = name;
-  renderBrushes();
-  // 找相似頁是針對某個人的，換人就回到全部的群
-  if (state.similar && state.similar.player !== name) closeSimilar();
-  renderSimilarBtn();
-}
-
-function renderSimilarBtn() {
-  const name = state.brush;
-  const isPlayer = state.players.includes(name);
-  const ready = isPlayer && state.people.some((p) => labelOf(p) === name);
-  $('similarBtn').disabled = !ready;
-  $('similarBtn').textContent = isPlayer ? `找相似：${name}` : '找相似';
-  $('similarBtn').title = ready ? '' : '先選一位球員，並至少點一張這個人的縮圖';
-}
-
-function renderTally() {
-  const counts = {};
-  for (const p of state.people) {
-    const l = labelOf(p);
-    if (l) counts[l] = (counts[l] || 0) + 1;
+function clickTile(event, tile, p) {
+  if (state.candidates && !labelOf(p.crop)) {
+    toggleRejected(tile, p);
+    return;
   }
-  const parts = state.players.map((n) => `${n} <b>${counts[n] || 0}</b>`);
-  $('tally').innerHTML = `已確認：${parts.join('、')}（共 ${state.people.length} 張）`;
+  // Shift 選取同一區連續的幾張
+  if (event.shiftKey && state.anchor) {
+    const tiles = [...tile.parentElement.querySelectorAll('.tile')];
+    const from = tiles.findIndex((t) => t.dataset.crop === state.anchor);
+    const to = tiles.indexOf(tile);
+    if (from >= 0) {
+      tiles.slice(Math.min(from, to), Math.max(from, to) + 1).forEach((t) => state.selected.add(t.dataset.crop));
+      syncSelection();
+      return;
+    }
+  }
+  if (state.selected.has(p.crop)) state.selected.delete(p.crop);
+  else state.selected.add(p.crop);
+  state.anchor = p.crop;
+  syncSelection();
 }
 
 function showPreview(p) {
+  state.hover = p.crop;
   $('frameImg').src = `/frames/${p.frame}`;
   const [x1, y1, x2, y2] = p.box;
   Object.assign($('box').style, {
     display: 'block', left: `${x1 * 100}%`, top: `${y1 * 100}%`, width: `${(x2 - x1) * 100}%`, height: `${(y2 - y1) * 100}%`,
   });
-  $('caption').textContent = `${p.video}，約 ${fmtTime(p.t)}（#${p.cluster} 群）`;
+  const label = labelOf(p.crop);
+  $('caption').textContent = `${p.video}，約 ${fmtTime(p.t)}（#${p.cluster} 群${label ? `，${label}` : ''}）`;
 }
 
-function needBrush() {
-  if (state.brush) return false;
-  setStatus('先在上方選一個人', true);
-  return true;
+function makeTile(p) {
+  const tile = el('button', 'tile');
+  tile.dataset.crop = p.crop;
+  tile.draggable = true;
+  tile.setAttribute('aria-label', `${p.video} ${fmtTime(p.t)}：${labelOf(p.crop) || '待分類'}`);
+  const img = el('img');
+  img.loading = 'lazy';
+  img.alt = '';
+  img.src = `/crops/${p.crop}`;
+  tile.append(img, el('span', '', fmtTime(p.t)));
+  tile.onclick = (event) => clickTile(event, tile, p);
+  tile.onmouseenter = () => showPreview(p);
+  tile.onfocus = () => showPreview(p);
+  tile.ondragstart = (event) => {
+    if (!state.selected.has(p.crop)) {
+      state.selected = new Set([p.crop]);
+      syncSelection();
+    }
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', p.crop);
+  };
+  return tile;
 }
 
-function paintTile(tile, p) {
-  const label = labelOf(p);
-  tile.style.setProperty('--c', label ? colorOf(label) : 'transparent');
-  tile.setAttribute('aria-label', `${p.video} ${fmtTime(p.t)}：${label || '未指定'}`);
-  tile.querySelector('span').textContent = `${label ? label + ' · ' : ''}${fmtTime(p.t)}`;
-}
-
-function makeGrid(people, onClick) {
-  const grid = document.createElement('div');
-  grid.className = 'grid';
-  for (const p of people) {
-    const tile = document.createElement('button');
-    tile.className = 'tile';
-    const img = document.createElement('img');
-    img.loading = 'lazy';
-    img.alt = '';
-    img.src = `/crops/${p.crop}`;
-    tile.append(img, document.createElement('span'));
-    paintTile(tile, p);
-    tile.onclick = () => onClick(tile, p);
-    tile.onmouseenter = () => showPreview(p);
-    tile.onfocus = () => showPreview(p);
-    grid.append(tile);
-  }
+function makeGrid(people) {
+  const grid = el('div', 'grid');
+  grid.append(...people.map(makeTile));
   return grid;
 }
 
-function clickTile(tile, p) {
-  if (needBrush()) return;
-  // 再點一次同一個人就清掉單張指定
-  if (state.labels.crops[p.crop] === state.brush) delete state.labels.crops[p.crop];
-  else state.labels.crops[p.crop] = state.brush;
-  paintTile(tile, p);
-  renderTally();
-  renderSimilarBtn();
-  save();
+function makeDropTarget(node, group) {
+  node.ondragover = (event) => {
+    event.preventDefault();
+    node.classList.add('drop');
+  };
+  node.ondragleave = (event) => {
+    if (!node.contains(event.relatedTarget)) node.classList.remove('drop');
+  };
+  node.ondrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    node.classList.remove('drop');
+    moveCrops([...state.selected], group);
+  };
 }
 
-// 平均挑，看得到同一群在不同時間的樣子
-function sample(list, n) {
-  if (list.length <= n) return list;
-  return Array.from({ length: n }, (_, i) => list[Math.floor(i * list.length / n)]);
+function makeFold(folded, label, onToggle) {
+  const fold = el('button', 'fold', folded ? '▸' : '▾');
+  fold.setAttribute('aria-expanded', !folded);
+  fold.setAttribute('aria-label', `${folded ? '展開' : '收起'} ${label}`);
+  fold.title = folded ? '展開' : '收起';
+  fold.onclick = () => {
+    onToggle();
+    saveFolds();
+    render();
+  };
+  return fold;
 }
 
-function renderClusters() {
-  const root = $('content');
-  root.replaceChildren();
+function renderBoard() {
+  const board = $('board');
+  board.replaceChildren();
+  groups().forEach((name, i) => {
+    const members = Object.entries(state.labels.crops)
+      .filter(([, value]) => value === name)
+      .map(([crop]) => byCrop.get(crop))
+      .filter(Boolean)
+      .reverse();
+    const folded = state.foldedColumns.has(name);
+    const column = el('section', folded ? 'column collapsed' : 'column');
+    column.style.setProperty('--c', colorOf(name));
+    column.dataset.group = name;
+    makeDropTarget(column, name);
+
+    const head = el('div', 'column-head');
+    head.append(
+      makeFold(folded, name, () => {
+        if (folded) state.foldedColumns.delete(name);
+        else state.foldedColumns.add(name);
+      }),
+      el('h2', '', name),
+      el('kbd', '', i + 1),
+      el('span', 'count', `${members.length} 張`),
+    );
+    if (!folded) head.append(el('span', 'spacer'));
+    const move = el('button', 'move', '轉到這裡');
+    move.onclick = () => moveCrops([...state.selected], name);
+    head.append(move);
+    if (!folded) {
+      const similar = el('button', '', '找相似');
+      similar.disabled = members.length === 0;
+      similar.title = members.length ? '' : '先轉幾張進來';
+      similar.onclick = () => openCandidates(name);
+      head.append(similar);
+    }
+    column.append(head);
+
+    if (!folded) {
+      column.append(makeGrid(members.slice(0, BOARD_LIMIT)));
+      if (members.length > BOARD_LIMIT) column.append(el('p', 'more', `只顯示最新 ${BOARD_LIMIT} 張`));
+    }
+    board.append(column);
+  });
+}
+
+function renderClusters(root) {
   const ids = [...new Set(state.people.map((p) => p.cluster))].sort((a, b) => a - b);
-  for (const id of ids) {
-    const members = state.people.filter((p) => p.cluster === id);
-    const section = document.createElement('section');
-    const head = document.createElement('div');
-    head.className = 'head';
-    const h2 = document.createElement('h2');
-    h2.textContent = `#${id}`;
-    const count = document.createElement('span');
-    count.className = 'count';
-    count.textContent = `${members.length} 張`;
-    head.append(h2, count);
-    const spacer = document.createElement('span');
-    spacer.className = 'spacer';
-    head.append(spacer);
-    if (members.length > PREVIEW_LIMIT) {
-      const more = document.createElement('button');
+  const remaining = shuffled.filter((p) => !labelOf(p.crop));
+  const liveIds = ids.filter((id) => remaining.some((p) => p.cluster === id));
+
+  const toolbar = el('div', 'toolbar');
+  toolbar.append(el('span', 'count', `待分類 ${remaining.length} 張，${liveIds.length} 群`), el('span', 'spacer'));
+  const foldAll = el('button', '', '全部收起');
+  foldAll.onclick = () => {
+    state.foldedClusters = new Set(ids);
+    saveFolds();
+    render();
+  };
+  const openAll = el('button', '', '全部展開');
+  openAll.onclick = () => {
+    state.foldedClusters = new Set();
+    saveFolds();
+    render();
+  };
+  toolbar.append(foldAll, openAll);
+  root.append(toolbar);
+
+  for (const id of liveIds) {
+    const members = remaining.filter((p) => p.cluster === id);
+    const folded = state.foldedClusters.has(id);
+    const section = el('section');
+    section.dataset.cluster = id;
+    const head = el('div', 'head');
+    head.append(
+      makeFold(folded, `#${id} 群`, () => {
+        if (folded) state.foldedClusters.delete(id);
+        else state.foldedClusters.add(id);
+      }),
+      el('h2', '', `#${id}`),
+      el('span', 'count', `${members.length} 張`),
+      el('span', 'spacer'),
+    );
+    if (!folded && members.length > POOL_LIMIT) {
       const open = state.expanded.has(id);
-      more.textContent = open ? `只看 ${PREVIEW_LIMIT} 張` : '全部展開';
+      const more = el('button', '', open ? `只看 ${POOL_LIMIT} 張` : '看全部');
       more.onclick = () => {
         if (open) state.expanded.delete(id);
         else state.expanded.add(id);
-        renderView();
+        render();
       };
       head.append(more);
     }
+    const all = el('button', '', '全選');
+    all.onclick = () => {
+      members.forEach((p) => state.selected.add(p.crop));
+      syncSelection();
+    };
+    const exclude = el('button', '', '整群排除');
+    exclude.onclick = () => moveCrops(members.map((p) => p.crop), OTHER);
+    head.append(all, exclude);
     section.append(head);
-    const shown = state.expanded.has(id) ? members : sample(members, PREVIEW_LIMIT);
-    section.append(makeGrid(shown, clickTile));
+    if (!folded) section.append(makeGrid(state.expanded.has(id) ? members : members.slice(0, POOL_LIMIT)));
     root.append(section);
   }
 }
 
-async function openSimilar() {
-  const player = state.brush;
+async function openCandidates(group) {
   setStatus('找相似…');
   try {
     const res = await fetch('/api/similar', {
       method: 'POST',
-      body: JSON.stringify({ player, labels: state.labels, limit: SIMILAR_PAGE }),
+      body: JSON.stringify({ group, labels: state.labels, limit: SIMILAR_PAGE }),
     });
     if (!res.ok) throw new Error(res.status);
-    state.similar = { player, crops: await res.json(), rejected: new Set() };
+    state.candidates = { group, crops: await res.json(), rejected: new Set() };
     setStatus('');
-    renderView();
-    window.scrollTo(0, 0);
+    render();
   } catch (e) {
     setStatus('找相似失敗，伺服器還開著嗎？', true);
   }
 }
 
-function closeSimilar() {
-  state.similar = null;
-  renderView();
-}
-
 function toggleRejected(tile, p) {
-  const { player, rejected } = state.similar;
-  const list = (state.labels.not[player] ??= []);
+  const { group, rejected } = state.candidates;
+  const list = (state.labels.not[group] ??= []);
   if (rejected.has(p.crop)) {
     rejected.delete(p.crop);
     list.splice(list.indexOf(p.crop), 1);
@@ -285,77 +472,110 @@ function toggleRejected(tile, p) {
     list.push(p.crop);
   }
   tile.classList.toggle('rejected', rejected.has(p.crop));
-  renderSimilarConfirm();
+  syncConfirm();
   save();
 }
 
-async function confirmSimilar() {
-  const { player, crops, rejected } = state.similar;
-  for (const crop of crops) {
-    if (!rejected.has(crop)) state.labels.crops[crop] = player;
-  }
-  renderTally();
+async function confirmCandidates() {
+  const { group, crops, rejected } = state.candidates;
+  moveCrops(crops.filter((crop) => !rejected.has(crop)), group);
   clearTimeout(saveTimer);
   await postLabels();
-  await openSimilar();
+  await openCandidates(group);
 }
 
-function renderSimilarConfirm() {
-  const { player, crops, rejected } = state.similar;
-  const b = $('confirmSimilar');
-  b.textContent = `其餘 ${crops.length - rejected.size} 張都是 ${player}，下一頁`;
+function syncConfirm() {
+  const { group, crops, rejected } = state.candidates;
+  const b = $('confirmBtn');
+  const n = crops.length - rejected.size;
+  b.textContent = group === OTHER ? `其餘 ${n} 張排除，下一頁` : `其餘 ${n} 張轉到 ${group}，下一頁`;
   b.disabled = crops.length === 0;
 }
 
-function renderSimilar() {
-  const { player, crops } = state.similar;
-  const root = $('content');
-  root.replaceChildren();
-  const section = document.createElement('section');
-  const head = document.createElement('div');
-  head.className = 'head';
-  const h2 = document.createElement('h2');
-  h2.textContent = `最像 ${player} 的 ${crops.length} 張`;
-  const hint = document.createElement('span');
-  hint.className = 'count';
-  hint.textContent = crops.length ? '點掉不是這個人的' : '沒有更多候選了';
-  const spacer = document.createElement('span');
-  spacer.className = 'spacer';
-  const confirm = document.createElement('button');
-  confirm.id = 'confirmSimilar';
-  confirm.className = 'primary';
-  confirm.onclick = confirmSimilar;
-  head.append(h2, hint, spacer, confirm);
+function renderCandidates(root) {
+  const { group, crops, rejected } = state.candidates;
+  const section = el('section');
+  const head = el('div', 'head');
+  head.append(
+    el('h2', '', `最像${group}的 ${crops.length} 張`),
+    el('span', 'count', crops.length ? '點掉不對的；是別人就指著按數字鍵' : '沒有更多候選了'),
+    el('span', 'spacer'),
+  );
+  const confirm = el('button', 'primary');
+  confirm.id = 'confirmBtn';
+  confirm.onclick = confirmCandidates;
+  const close = el('button', '', '關閉');
+  close.onclick = () => {
+    state.candidates = null;
+    render();
+  };
+  head.append(confirm, close);
   section.append(head);
-  const byCrop = new Map(state.people.map((p) => [p.crop, p]));
-  section.append(makeGrid(crops.map((c) => byCrop.get(c)), toggleRejected));
+  const grid = makeGrid(crops.map((crop) => byCrop.get(crop)));
+  grid.querySelectorAll('.tile').forEach((tile) => {
+    if (rejected.has(tile.dataset.crop)) tile.classList.add('rejected');
+  });
+  section.append(grid);
   root.append(section);
-  renderSimilarConfirm();
+  syncConfirm();
 }
 
-function renderView() {
-  $('backBtn').hidden = !state.similar;
-  if (state.similar) renderSimilar();
-  else renderClusters();
-  renderSimilarBtn();
+function render() {
+  renderBoard();
+  const pool = $('pool');
+  pool.replaceChildren();
+  if (state.candidates) renderCandidates(pool);
+  else renderClusters(pool);
+  $('undoBtn').disabled = state.history.length === 0;
+  syncSelection();
 }
 
-document.addEventListener('keydown', (e) => {
-  const names = [...state.players, OTHER];
-  const i = Number(e.key) - 1;
-  if (i >= 0 && i < names.length) setBrush(names[i]);
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    undo();
+    return;
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.key === 'Escape') {
+    state.selected.clear();
+    syncSelection();
+    return;
+  }
+  const target = state.selected.size ? [...state.selected] : (state.hover ? [state.hover] : []);
+  if (event.key === '0') {
+    moveCrops(target, null);
+    return;
+  }
+  const name = groups()[Number(event.key) - 1];
+  if (name) moveCrops(target, name);
 });
-$('similarBtn').onclick = openSimilar;
-$('backBtn').onclick = closeSimilar;
+$('clearBtn').onclick = () => {
+  state.selected.clear();
+  syncSelection();
+};
+$('undoBtn').onclick = undo;
+makeDropTarget($('pool'), null);
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--stick', `${$('top').offsetHeight}px`);
+}).observe($('top'));
+
+// 同一群用固定的亂序：看得到不同時間的樣子，轉走一張時其他張也不會大風吹
+function stableHash(text) {
+  let h = 0;
+  for (const ch of text) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0;
+  return h;
+}
 
 (async () => {
   const data = await (await fetch('/api/data')).json();
   Object.assign(state, data);
   state.labels.not ??= {};
+  byCrop = new Map(state.people.map((p) => [p.crop, p]));
+  shuffled = [...state.people].sort((a, b) => stableHash(a.crop) - stableHash(b.crop));
   $('title').textContent = `球員指認：${state.session}`;
-  renderBrushes();
-  renderView();
-  renderTally();
+  loadFolds();
+  render();
 })().catch((e) => setStatus(`載入失敗：${e.message}`, true));
 </script>
 </body>
