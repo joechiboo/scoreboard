@@ -17,8 +17,6 @@ lab = []
 for k, (i, n) in enumerate(items):
     mask = [j for j, (m, _) in enumerate(items) if vid(m) != vid(i)]
     if mask: lab.append(float((A[mask] @ X[i]).max()))
-un = [float((A @ X[i]).max()) for i in range(len(recs)) if recs[i]['crop'] not in L]
-print('已指認 相似度 p10/p50', np.round(np.percentile(lab, [10, 50]), 3), ' 未指認 p50/p90', np.round(np.percentile(un, [50, 90]), 3))
 m = YOLO('yolo11n-seg.pt'); tiles = []
 for h in json.loads((S / 'hits.json').read_text()):
     cap = cv2.VideoCapture(str(V / (h['clip'] + '.mp4'))); cap.set(cv2.CAP_PROP_POS_MSEC, h['t'] * 1000); ok, f = cap.read()
@@ -32,7 +30,7 @@ for h in json.loads((S / 'hits.json').read_text()):
     if best is None: print(h['clip'][-6:], round(h['goal']), '分割失敗'); continue
     n, (x1, y1, x2, y2) = best
     crop = f[y1:y2, x1:x2]; mk = (r.masks.data.cpu().numpy()[n] > 0.5)[y1:y2, x1:x2].astype(np.uint8)
-    q = clothing_feature(crop, mk); sim = A @ q; top = np.argsort(-sim)[:5]
+    q = clothing_feature(crop, mk); sim = A @ q; top = np.argsort(-sim)[:7]
     v = collections.Counter(names[i] for i in top).most_common(1)[0][0]
     others = sum(1 for b in r.boxes.xyxy.cpu().numpy().astype(int).tolist() if b != [x1, y1, x2, y2] and max(0, min(b[2], x2) - max(b[0], x1)) * max(0, min(b[3], y2) - max(b[1], y1)) > 0.1 * (x2-x1)*(y2-y1))
     print(h['clip'][-6:], f"{h['goal']:6.0f}s", v, f"相似度 {sim[top[0]]:.3f}", f"重疊 {others} 人")
