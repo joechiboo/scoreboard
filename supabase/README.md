@@ -25,13 +25,14 @@ supabase db push
 | `games` | 比賽。同時只允許一場 `status = 'live'`（partial unique index） |
 | `score_events` | 加分事件，只新增不刪除。`points` 為 -3～3（不含 0），`source` 為 `manual`／`auto` |
 | `score_events.client_id` | 寫入端產生的 UUID（unique），App 重送時用 `on conflict do nothing` 避免重複計分 |
-| `score_events.hoop` | 1／2 號籃框；自動進球必填。App 只傳 `hoop`，`team` 由 trigger 依換場狀態填入 |
+| `score_events.hoop` | 1／2 號籃框；自動進球必填。App 只傳 `hoop`，全場時 `team` 由 trigger 依換場狀態填入 |
+| `score_events.pending` | 半場自動進球待確認：`team` 為空、不計分；選隊伍後改 `false`。約束 `pending = (team is null)` |
 | `score_events.confidence` | 辨識信心度 0～1 |
 | `games.mode` | `full` 全場（預設，網頁點一下 +2）／`half` 半場鬥牛（點一下 +1） |
 | `games.sides_swapped` | 換場對調：false 時 1 號籃框 = A 隊、2 號 = B 隊，true 時相反 |
 | `game_scores` | view，由未撤銷的事件加總出 `score_a`、`score_b` |
 | `new_game(a, b, mode)` | RPC：結束目前 live 比賽並開新局（同一個 transaction）；`mode` 省略時沿用上一場 |
-| `undo_last(game_id)` | RPC：撤銷該場最後一筆未撤銷事件 |
+| `undo_last(game_id)` | RPC：撤銷該場最後一筆未撤銷、非待確認的事件 |
 
 - Realtime：`games`、`score_events` 已加入 `supabase_realtime` publication
 - RLS：Phase 1 無登入，anon 可讀／新增／更新，不可刪除
