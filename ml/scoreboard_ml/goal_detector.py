@@ -21,7 +21,8 @@ BALL_TO_RIM_RATIO = 24 / 45
 
 @dataclass
 class GoalConfig:
-    max_transit_s: float = 0.7  # 從框上方到框下方的最長時間
+    # 從框上方到框下方的最長時間。實拍滾框後掉進的球在網裡很慢，最久量到 0.8 秒（10-30 半場）
+    max_transit_s: float = 1.0
     above_margin: float = 0.5  # 「上方」區左右可超出框的寬度（倍數）
     crossing_tol: float = 0.1  # 穿越點可超出框左右的容許量（倍數）
     below_margin: float = 0.15  # 「下方」區左右可超出框的寬度（倍數）

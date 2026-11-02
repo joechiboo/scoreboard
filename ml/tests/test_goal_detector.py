@@ -143,3 +143,11 @@ def test_net_shake_before_shot_does_not_count():
     events = [e for t, b in frames if (e := det.update(t, b, 0.0))]
     events += [e for i in range(1, 30) if (e := det.update(1.3 + i / FPS, None, 0.0))]
     assert events == []
+
+
+def test_slow_drop_through_net_after_rolling():
+    # 實拍：球在框上滾完掉進網裡，0.8 秒後才從網下出現
+    frames = [(0.0, Ball(330, 175, BALL_D, BALL_D)), (0.2, Ball(345, 178, BALL_D, BALL_D))]
+    frames += [(0.2 + i / FPS, None) for i in range(1, 24)]
+    frames += [(1.0, Ball(350, 290, BALL_D, BALL_D))]
+    assert len(run(frames, net_after=0.0, config=GoalConfig(use_net=False))) == 1
