@@ -33,6 +33,17 @@ python scripts/eval_video.py clip.mp4 --rim 812,402,955,430 --labels clip.csv --
 
 YOLO 只在偵測區（由籃框框選框往上 2.5、往下 1.6、左右 0.6 個框寬）裡找球。預設用 COCO 預訓練的 `yolo11n.pt`（sports ball 類別）；換成自訓模型時用 `--model`，會自動選名稱含 ball 的類別。
 
+## 指認球員（精華剪輯用）
+
+從影片抓出所有人、依衣著分群，再用本機網頁指定誰是誰。同一天衣服不換，一天指認一次。
+
+```bash
+python scripts/people_extract.py datasets/videos/2026-10-30_half
+python scripts/people_label.py 2026-10-30_half --players 甲,乙,丙
+```
+
+人框、畫面和指認結果都在 `datasets/people/<場次>/`，不進版控；伺服器只綁 `127.0.0.1`。
+
 ## 轉成 TFLite（給 app/）
 
 ```bash

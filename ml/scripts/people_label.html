@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>球員指認</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14161a; --panel: #1e2127; --line: #333842; --text: #e8eaed; --muted: #9aa1ac;
+    --p0: #4ea1ff; --p1: #ffb020; --p2: #3ddc97; --p3: #e06cd8; --p4: #ff7a6b;
+    --other: #7d8590;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: default; }
+  .primary { background: var(--text); color: #111; border-color: var(--text); font-weight: 600; }
+  .brush { --c: var(--other); border-color: var(--c); }
+  .brush[aria-pressed="true"] { background: var(--c); color: #111; font-weight: 600; }
+  kbd { font: 11px Consolas, monospace; opacity: .75; margin-left: 4px; }
+  #status { color: var(--muted); margin-left: auto; text-align: right; }
+  #status.error { color: var(--p4); font-weight: 600; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; padding: 16px; align-items: start; }
+  #preview { position: sticky; top: 68px; }
+  #frame { position: relative; background: #000; border-radius: 6px; overflow: hidden; aspect-ratio: 16 / 9; }
+  #frame img { width: 100%; display: block; }
+  #frame img:not([src]) { display: none; }
+  #box { position: absolute; border: 2px solid #fff; outline: 2px solid #000; display: none; }
+  #caption, .help, .tally { color: var(--muted); margin: 8px 0 0; }
+  .tally b { color: var(--text); font-weight: 600; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  section h2 { font-size: 14px; margin: 0; font-weight: 600; }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .count { color: var(--muted); }
+  .spacer { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+  .tile { --c: transparent; position: relative; padding: 0; border: 3px solid var(--c); border-radius: 6px; overflow: hidden; background: #000; aspect-ratio: 1 / 2; }
+  .tile:hover, .tile:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+  .tile img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .tile span { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .75); font-size: 11px; line-height: 1.5; color: #fff; }
+  .tile.rejected img { opacity: .25; }
+  .tile.rejected::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 36px; color: var(--p4); }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    #preview { position: static; order: -1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">球員指認</h1>
+  <div id="brushes" style="display:contents"></div>
+  <button id="similarBtn">找相似</button>
+  <button id="backBtn" hidden>回到全部的群</button>
+  <span id="status" role="status"></span>
+</header>
+<main>
+  <div id="content"></div>
+  <aside id="preview">
+    <div id="frame"><img id="frameImg" alt="縮圖所在的整張畫面"><div id="box"></div></div>
+    <p id="caption">游標移到縮圖上，這裡會顯示當時的整張畫面。</p>
+    <p class="tally" id="tally"></p>
+    <p class="help">
+      1. 上方選一個人（或按數字鍵），在下面點幾張確定是這個人的縮圖。<br>
+      2. 按「找相似」，點掉不是這個人的（打 ✕），再按「其餘都是」，下一頁會照你的回饋重排。<br>
+      3. 一頁裡幾乎都不是了就可以停，換下一個人。路人不用指定。<br>
+      點錯了再點一次同一張會清掉。分群只是方便找到第一張，同一群可能混到不同人。
+    </p>
+  </aside>
+</main>
+<script>
+const PREVIEW_LIMIT = 40;
+const SIMILAR_PAGE = 30;
+const OTHER = '路人';
+const state = {
+  session: '', players: [], people: [], labels: { crops: {}, not: {} }, brush: null, expanded: new Set(),
+  similar: null, // { player, crops, rejected }：有值時顯示找相似頁
+};
+const $ = (id) => document.getElementById(id);
+
+const colorOf = (name) => {
+  const i = state.players.indexOf(name);
+  return i >= 0 ? `var(--p${i % 5})` : 'var(--other)';
+};
+const labelOf = (p) => state.labels.crops[p.crop] ?? null;
+const fmtTime = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+
+function setStatus(text, isError = false) {
+  $('status').textContent = text;
+  $('status').className = isError ? 'error' : '';
+}
+
+async function postLabels() {
+  try {
+    const res = await fetch('/api/labels', { method: 'POST', body: JSON.stringify(state.labels) });
+    if (!res.ok) throw new Error(res.status);
+    setStatus('已儲存');
+  } catch (e) {
+    setStatus('儲存失敗，伺服器還開著嗎？', true);
+  }
+}
+
+let saveTimer = null;
+function save() {
+  setStatus('儲存中…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(postLabels, 200);
+}
+
+function renderBrushes() {
+  const box = $('brushes');
+  box.replaceChildren();
+  [...state.players, OTHER].forEach((name, i) => {
+    const b = document.createElement('button');
+    b.className = 'brush';
+    b.style.setProperty('--c', colorOf(name));
+    b.setAttribute('aria-pressed', state.brush === name);
+    b.append(name);
+    const k = document.createElement('kbd');
+    k.textContent = i + 1;
+    b.append(k);
+    b.onclick = () => setBrush(name);
+    box.append(b);
+  });
+}
+
+function setBrush(name) {
+  state.brush = name;
+  renderBrushes();
+  // 找相似頁是針對某個人的，換人就回到全部的群
+  if (state.similar && state.similar.player !== name) closeSimilar();
+  renderSimilarBtn();
+}
+
+function renderSimilarBtn() {
+  const name = state.brush;
+  const isPlayer = state.players.includes(name);
+  const ready = isPlayer && state.people.some((p) => labelOf(p) === name);
+  $('similarBtn').disabled = !ready;
+  $('similarBtn').textContent = isPlayer ? `找相似：${name}` : '找相似';
+  $('similarBtn').title = ready ? '' : '先選一位球員，並至少點一張這個人的縮圖';
+}
+
+function renderTally() {
+  const counts = {};
+  for (const p of state.people) {
+    const l = labelOf(p);
+    if (l) counts[l] = (counts[l] || 0) + 1;
+  }
+  const parts = state.players.map((n) => `${n} <b>${counts[n] || 0}</b>`);
+  $('tally').innerHTML = `已確認：${parts.join('、')}（共 ${state.people.length} 張）`;
+}
+
+function showPreview(p) {
+  $('frameImg').src = `/frames/${p.frame}`;
+  const [x1, y1, x2, y2] = p.box;
+  Object.assign($('box').style, {
+    display: 'block', left: `${x1 * 100}%`, top: `${y1 * 100}%`, width: `${(x2 - x1) * 100}%`, height: `${(y2 - y1) * 100}%`,
+  });
+  $('caption').textContent = `${p.video}，約 ${fmtTime(p.t)}（#${p.cluster} 群）`;
+}
+
+function needBrush() {
+  if (state.brush) return false;
+  setStatus('先在上方選一個人', true);
+  return true;
+}
+
+function paintTile(tile, p) {
+  const label = labelOf(p);
+  tile.style.setProperty('--c', label ? colorOf(label) : 'transparent');
+  tile.setAttribute('aria-label', `${p.video} ${fmtTime(p.t)}：${label || '未指定'}`);
+  tile.querySelector('span').textContent = `${label ? label + ' · ' : ''}${fmtTime(p.t)}`;
+}
+
+function makeGrid(people, onClick) {
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  for (const p of people) {
+    const tile = document.createElement('button');
+    tile.className = 'tile';
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.src = `/crops/${p.crop}`;
+    tile.append(img, document.createElement('span'));
+    paintTile(tile, p);
+    tile.onclick = () => onClick(tile, p);
+    tile.onmouseenter = () => showPreview(p);
+    tile.onfocus = () => showPreview(p);
+    grid.append(tile);
+  }
+  return grid;
+}
+
+function clickTile(tile, p) {
+  if (needBrush()) return;
+  // 再點一次同一個人就清掉單張指定
+  if (state.labels.crops[p.crop] === state.brush) delete state.labels.crops[p.crop];
+  else state.labels.crops[p.crop] = state.brush;
+  paintTile(tile, p);
+  renderTally();
+  renderSimilarBtn();
+  save();
+}
+
+// 平均挑，看得到同一群在不同時間的樣子
+function sample(list, n) {
+  if (list.length <= n) return list;
+  return Array.from({ length: n }, (_, i) => list[Math.floor(i * list.length / n)]);
+}
+
+function renderClusters() {
+  const root = $('content');
+  root.replaceChildren();
+  const ids = [...new Set(state.people.map((p) => p.cluster))].sort((a, b) => a - b);
+  for (const id of ids) {
+    const members = state.people.filter((p) => p.cluster === id);
+    const section = document.createElement('section');
+    const head = document.createElement('div');
+    head.className = 'head';
+    const h2 = document.createElement('h2');
+    h2.textContent = `#${id}`;
+    const count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = `${members.length} 張`;
+    head.append(h2, count);
+    const spacer = document.createElement('span');
+    spacer.className = 'spacer';
+    head.append(spacer);
+    if (members.length > PREVIEW_LIMIT) {
+      const more = document.createElement('button');
+      const open = state.expanded.has(id);
+      more.textContent = open ? `只看 ${PREVIEW_LIMIT} 張` : '全部展開';
+      more.onclick = () => {
+        if (open) state.expanded.delete(id);
+        else state.expanded.add(id);
+        renderView();
+      };
+      head.append(more);
+    }
+    section.append(head);
+    const shown = state.expanded.has(id) ? members : sample(members, PREVIEW_LIMIT);
+    section.append(makeGrid(shown, clickTile));
+    root.append(section);
+  }
+}
+
+async function openSimilar() {
+  const player = state.brush;
+  setStatus('找相似…');
+  try {
+    const res = await fetch('/api/similar', {
+      method: 'POST',
+      body: JSON.stringify({ player, labels: state.labels, limit: SIMILAR_PAGE }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    state.similar = { player, crops: await res.json(), rejected: new Set() };
+    setStatus('');
+    renderView();
+    window.scrollTo(0, 0);
+  } catch (e) {
+    setStatus('找相似失敗，伺服器還開著嗎？', true);
+  }
+}
+
+function closeSimilar() {
+  state.similar = null;
+  renderView();
+}
+
+function toggleRejected(tile, p) {
+  const { player, rejected } = state.similar;
+  const list = (state.labels.not[player] ??= []);
+  if (rejected.has(p.crop)) {
+    rejected.delete(p.crop);
+    list.splice(list.indexOf(p.crop), 1);
+  } else {
+    rejected.add(p.crop);
+    list.push(p.crop);
+  }
+  tile.classList.toggle('rejected', rejected.has(p.crop));
+  renderSimilarConfirm();
+  save();
+}
+
+async function confirmSimilar() {
+  const { player, crops, rejected } = state.similar;
+  for (const crop of crops) {
+    if (!rejected.has(crop)) state.labels.crops[crop] = player;
+  }
+  renderTally();
+  clearTimeout(saveTimer);
+  await postLabels();
+  await openSimilar();
+}
+
+function renderSimilarConfirm() {
+  const { player, crops, rejected } = state.similar;
+  const b = $('confirmSimilar');
+  b.textContent = `其餘 ${crops.length - rejected.size} 張都是 ${player}，下一頁`;
+  b.disabled = crops.length === 0;
+}
+
+function renderSimilar() {
+  const { player, crops } = state.similar;
+  const root = $('content');
+  root.replaceChildren();
+  const section = document.createElement('section');
+  const head = document.createElement('div');
+  head.className = 'head';
+  const h2 = document.createElement('h2');
+  h2.textContent = `最像 ${player} 的 ${crops.length} 張`;
+  const hint = document.createElement('span');
+  hint.className = 'count';
+  hint.textContent = crops.length ? '點掉不是這個人的' : '沒有更多候選了';
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  const confirm = document.createElement('button');
+  confirm.id = 'confirmSimilar';
+  confirm.className = 'primary';
+  confirm.onclick = confirmSimilar;
+  head.append(h2, hint, spacer, confirm);
+  section.append(head);
+  const byCrop = new Map(state.people.map((p) => [p.crop, p]));
+  section.append(makeGrid(crops.map((c) => byCrop.get(c)), toggleRejected));
+  root.append(section);
+  renderSimilarConfirm();
+}
+
+function renderView() {
+  $('backBtn').hidden = !state.similar;
+  if (state.similar) renderSimilar();
+  else renderClusters();
+  renderSimilarBtn();
+}
+
+document.addEventListener('keydown', (e) => {
+  const names = [...state.players, OTHER];
+  const i = Number(e.key) - 1;
+  if (i >= 0 && i < names.length) setBrush(names[i]);
+});
+$('similarBtn').onclick = openSimilar;
+$('backBtn').onclick = closeSimilar;
+
+(async () => {
+  const data = await (await fetch('/api/data')).json();
+  Object.assign(state, data);
+  state.labels.not ??= {};
+  $('title').textContent = `球員指認：${state.session}`;
+  renderBrushes();
+  renderView();
+  renderTally();
+})().catch((e) => setStatus(`載入失敗：${e.message}`, true));
+</script>
+</body>
+</html>
