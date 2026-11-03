@@ -5,7 +5,7 @@ P = 'datasets/people/2026-10-30_half/'
 recs = json.load(open(P + 'people.json', encoding='utf-8'))
 X = np.load(P + 'features.npy'); L = json.load(open(P + 'labels.json', encoding='utf-8'))['crops']
 y = np.array([L[r['crop']] for r in recs]); T = np.array([r['t'] for r in recs]); V = np.array([r['video'] for r in recs])
-PL = ['我', 'Dennis', 'Spark']; rng = np.random.default_rng(0)
+PL = sorted(set(y) - {'路人'}); rng = np.random.default_rng(0)
 print('每人張數 門檻  我們被認出  認對是誰  路人被誤認')
 for k in (3, 5, 10, 20):
     for th in (0.75, 0.80, 0.83, 0.86):

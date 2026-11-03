@@ -10,10 +10,11 @@ for i in range(len(recs)):
     tr = np.where(vids != vids[i])[0]; k = tr[np.argsort(-(X[tr] @ X[i]))[:7]]
     pred.append(collections.Counter(names_a[k]).most_common(1)[0][0])
 pred = np.array(pred)
-for n in ['我', 'Dennis', 'Spark', '路人']:
+PLAYERS = sorted(set(names) - {'路人'})
+for n in PLAYERS + ['路人']:
     tp = ((pred == n) & (names_a == n)).sum()
     print(f"{n}: 實際 {(names_a==n).sum()}，抓到 {tp}（{tp/(names_a==n).sum():.0%}），認成他的裡面真的是他 {tp/max((pred==n).sum(),1):.0%}")
 ours = names_a != '路人'; po = pred != '路人'
 print('我們三人 抓到', f"{(ours&po).sum()}/{ours.sum()}", '路人被當成我們', f"{(~ours&po).sum()}/{(~ours).sum()}")
 # 同一秒內的兩張不算獨立：另外看「不同影片」已是最嚴格的切法
-print('出現的影片數：', {n: len(set(vids[names_a == n])) for n in ['我', 'Dennis', 'Spark']})
+print('出現的影片數：', {n: len(set(vids[names_a == n])) for n in PLAYERS})
