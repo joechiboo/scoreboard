@@ -22,15 +22,14 @@ class YuvFrame {
   final int yStride, uvStride, uvPixelStride;
 }
 
-/// 從畫面裁出一塊 RGB。座標是「正立」的畫面座標；手機橫向反過來拿時
-/// （upsideDown）感光元件的畫面是倒的，這裡轉正，後面的判定都不用管方向。
-Uint8List cropRgb(YuvFrame f, int x0, int y0, int w, int h, {bool upsideDown = false}) {
+/// 從畫面裁出一塊 RGB。鏡頭畫面鎖在單一橫向，感光元件的座標就是畫面座標。
+Uint8List cropRgb(YuvFrame f, int x0, int y0, int w, int h) {
   final out = Uint8List(w * h * 3);
   var o = 0;
   for (var row = 0; row < h; row++) {
     for (var col = 0; col < w; col++) {
-      final sx = upsideDown ? f.width - 1 - (x0 + col) : x0 + col;
-      final sy = upsideDown ? f.height - 1 - (y0 + row) : y0 + row;
+      final sx = x0 + col;
+      final sy = y0 + row;
       final yv = f.y[sy * f.yStride + sx];
       final uvi = (sy >> 1) * f.uvStride + (sx >> 1) * f.uvPixelStride;
       final u = f.u[uvi] - 128;
@@ -137,8 +136,8 @@ class NetMotion {
   Float32List? _prev;
   Ball? _prevBall;
 
-  double update(YuvFrame f, Ball? ball, {bool upsideDown = false}) {
-    final cur = _sample(f, upsideDown);
+  double update(YuvFrame f, Ball? ball) {
+    final cur = _sample(f);
     final prev = _prev;
     final prevBall = _prevBall;
     _prev = cur;
@@ -170,7 +169,7 @@ class NetMotion {
     return n == 0 ? 0 : sum / n;
   }
 
-  Float32List _sample(YuvFrame f, bool upsideDown) {
+  Float32List _sample(YuvFrame f) {
     final raw = Float32List(grid * grid);
     // 每格取區塊平均（畫面解析度高時等於 area 縮圖）
     final cw = region.width / grid, ch = region.height / grid;
@@ -181,8 +180,8 @@ class NetMotion {
         var sum = 0, n = 0;
         for (var y = y0; y < y1; y++) {
           for (var x = x0; x < x1; x++) {
-            final px = (upsideDown ? f.width - 1 - x : x).clamp(0, f.width - 1);
-            final py = (upsideDown ? f.height - 1 - y : y).clamp(0, f.height - 1);
+            final px = x.clamp(0, f.width - 1);
+            final py = y.clamp(0, f.height - 1);
             sum += f.y[py * f.yStride + px];
             n++;
           }

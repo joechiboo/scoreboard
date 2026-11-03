@@ -56,8 +56,7 @@ class GoalPipeline {
   double _lastDone = 0;
   bool _headerWritten = false;
 
-  /// [upsideDown]：手機橫向反過來拿，感光元件的畫面是倒的。
-  Future<void> onFrame(YuvFrame f, {required bool upsideDown}) async {
+  Future<void> onFrame(YuvFrame f) async {
     if (_busy) return;
     _busy = true;
     try {
@@ -71,7 +70,7 @@ class GoalPipeline {
       final cw = roi.width.ceil().clamp(1, f.width - x0), ch = roi.height.ceil().clamp(1, f.height - y0);
 
       final t = _clock.elapsedMicroseconds / 1e6;
-      final rgb = cropRgb(f, x0, y0, cw, ch, upsideDown: upsideDown);
+      final rgb = cropRgb(f, x0, y0, cw, ch);
       final result = await detector.detect(rgb, cw, ch);
 
       final balls = [
@@ -79,7 +78,7 @@ class GoalPipeline {
       ];
       final ball = pickBall(balls, _prev);
       _prev = ball;
-      final motion = _net!.update(f, ball, upsideDown: upsideDown);
+      final motion = _net!.update(f, ball);
       final ev = _goal!.update(t, ball, motion);
       final log = trace;
       if (log != null) {
@@ -93,7 +92,7 @@ class GoalPipeline {
                 '${ball.diameter.toStringAsFixed(0)},${ball.conf.toStringAsFixed(2)}';
         log.write('GT ${t.toStringAsFixed(3)} rim=${rim.left.toStringAsFixed(0)},${rim.top.toStringAsFixed(0)},'
             '${rim.right.toStringAsFixed(0)},${rim.bottom.toStringAsFixed(0)} n=${balls.length} ball=$b '
-            'net=${motion.toStringAsFixed(4)} ms=${result.inferenceMs}+${result.prepareMs} goal=${ev != null} up=${upsideDown ? 1 : 0}');
+            'net=${motion.toStringAsFixed(4)} ms=${result.inferenceMs}+${result.prepareMs} goal=${ev != null}');
       }
       if (ev != null) onGoal(ev);
 

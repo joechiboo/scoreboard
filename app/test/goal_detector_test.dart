@@ -127,12 +127,6 @@ void main() {
       expect(rgb.sublist(15, 18), [42, 42, 42]);
     });
 
-    test('裁切：手機反過來拿時轉正', () {
-      final f = frame(8, 6, (x, y) => x * 10 + y);
-      // 正立座標 (0,0) 對應感光元件的右下角 (7,5)
-      expect(cropRgb(f, 0, 0, 1, 1, upsideDown: true).sublist(0, 3), [75, 75, 75]);
-    });
-
     test('Letterbox：直長裁切置中補灰，座標換得回來', () {
       final rgb = Uint8List(10 * 20 * 3)..fillRange(0, 600, 255);
       final lb = Letterbox.from(rgb, 10, 20, 40);

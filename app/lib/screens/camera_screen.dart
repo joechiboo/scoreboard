@@ -43,7 +43,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    // 只允許一個橫向。Android 從橫向翻 180 度不算設定改變，相機外掛收不到通知，
+    // 分不出手機正反，找球的座標就會整個顛倒。實測過的是這個方向，手機上緣朝左。
+    SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable(); // 架著拍不能自動鎖屏
     _initCamera();
@@ -125,7 +127,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           uvStride: uv.bytesPerRow,
           uvPixelStride: uv.bytesPerPixel ?? 1,
         ),
-        upsideDown: cam.value.deviceOrientation == DeviceOrientation.landscapeRight,
       );
     });
   }
