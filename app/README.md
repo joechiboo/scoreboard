@@ -22,6 +22,15 @@
 5. 畫面上方出現「找球 fps」就開始偵測了，球經過時會畫黃圈
 6. 腳架動到就要重新框選
 
+## 拉回每幀記錄
+
+偵測時每一幀都會記在手機上（每 30 分鐘約 3 MB，留最近 30 個檔），給事後調門檻用；Supabase 只有判定成進球的那幾筆。
+
+```bash
+adb pull /sdcard/Android/data/com.joechiboo.scoreboard_detector/files/trace ml/datasets/trace
+```
+
+
 ## 安裝到手機
 
 每次推送 `app/` 的改動，GitHub Actions 會自動編 APK 並更新到 [detector-latest release](https://github.com/joechiboo/scoreboard/releases/tag/detector-latest)。用 Android 手機打開下載 `app-release.apk` 安裝（需允許安裝未知來源 App）。

@@ -9,6 +9,7 @@ import '../services/goal_gate.dart';
 import '../services/goal_pipeline.dart';
 import '../services/goal_reporter.dart';
 import '../services/settings.dart';
+import '../services/trace_log.dart';
 import '../services/vision.dart';
 import '../widgets/rim_hint.dart';
 import '../widgets/rim_selector.dart';
@@ -33,6 +34,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   final _gate = GoalGate();
   BallDetector? _detector;
   GoalPipeline? _pipeline;
+  TraceLog? _trace;
   bool _streaming = false;
   bool _showHint = true;
   final _status = ValueNotifier<PipelineStatus?>(null);
@@ -81,6 +83,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       _streaming = false;
       _pipeline = null;
       _status.value = null;
+      _closeTrace();
       await cam.stopImageStream();
       return;
     }
@@ -90,7 +93,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (mounted) setState(() => _error = '模型載入失敗：$e');
       return;
     }
-    if (!mounted || _camera != cam) return;
+    final trace = await TraceLog.open();
+    if (!mounted || _camera != cam) {
+      await trace?.close();
+      return;
+    }
+    _trace = trace;
     final pipeline = GoalPipeline(
       rimNorm: rim,
       detector: _detector!,
@@ -98,6 +106,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         if (mounted) _onGoal(confidence: ev.confidence);
       },
       onStatus: (s) => _status.value = s,
+      trace: trace,
     );
     _pipeline = pipeline;
     _streaming = true;
@@ -121,6 +130,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     });
   }
 
+  void _closeTrace() {
+    _trace?.close();
+    _trace = null;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final cam = _camera;
@@ -128,6 +142,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       _camera = null;
       _streaming = false;
       _pipeline = null;
+      _closeTrace();
       cam.dispose();
     } else if (state == AppLifecycleState.resumed && _camera == null) {
       _initCamera();
@@ -138,6 +153,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pipeline = null;
+    _closeTrace();
     _camera?.dispose();
     _detector?.dispose();
     _status.dispose();

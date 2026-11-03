@@ -1,3 +1,4 @@
+import { keepScreenOn } from './wake-lock.js'
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
@@ -664,6 +665,8 @@ for (const dlg of app.querySelectorAll('dialog')) {
     if (!inside) dlg.close()
   })
 }
+
+keepScreenOn()
 
 loadGame(await getCurrentGame()).catch((err) => {
   console.error(err)
