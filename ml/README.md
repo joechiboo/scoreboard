@@ -50,17 +50,27 @@ python scripts/people_label.py 2026-10-30_half --players 甲,乙,丙
 
 ```bash
 python scripts/highlight_track.py datasets/videos/2026-10-30_half/clip.mp4 805.6
-python scripts/highlight_zoom.py datasets/videos/2026-10-30_half/clip.mp4 805.6 --range=-3.6,-1.3 --out zoom.jpg
+python scripts/highlight_zoom.py datasets/videos/2026-10-30_half/clip.mp4 805.6 --range=-3.2,-0.5 --out zoom.jpg
 python scripts/highlight_render.py datasets/highlights/2026-10-30_half/plan.json --out 精華.mp4
 ```
+
+核對時要看到進球前約 0.5 秒：只看到前 1.3 秒，會漏掉最後接球再投的人。
 
 `plan.json` 的格式見 `highlight_render.py` 開頭。計畫、追蹤結果和成品都在 `datasets/highlights/<場次>/`，不進版控。
 
 ## 轉成 TFLite（給 app/）
 
 ```bash
-python scripts/export_tflite.py --model yolo11n.pt --imgsz 320 [--int8]
+python scripts/export_tflite.py --model yolo11n.pt --imgsz 640 [--int8]
 ```
+
+Ultralytics 的 LiteRT 轉檔只支援 Linux x86 和 macOS。Windows 改跑 GitHub Actions，再下載 artifact：
+
+```bash
+gh workflow run export-model.yml -f imgsz=640
+```
+
+App 用 640 輸入（`app/assets/yolo11n_640.tflite`），320 在手機規格模擬時漏太多球。
 
 ## 測試
 
