@@ -71,7 +71,8 @@
 | --- | --- |
 | [docs/TODO.md](docs/TODO.md) | 待辦清單與待決定事項 |
 | [docs/goal-detection.md](docs/goal-detection.md) | 框選籃框、偵測區、三道進球檢查、麵包球分析、參數、罰球模式的出手判定 |
-| [docs/recording-guide.md](docs/recording-guide.md) | 腳架擺放、錄影規格、要錄的內容、標記格式 |
+| [docs/game-day.md](docs/game-day.md) | 比賽日指南：器材清單、三台裝置怎麼擺（含計分板平板）、開打前後流程、當天要驗的事 |
+| [docs/recording-guide.md](docs/recording-guide.md) | 錄影規格、兩種機位比較、要錄的內容、標記格式 |
 | [docs/decisions.md](docs/decisions.md) | 設計決策與已知風險 |
 
 ## 開發
