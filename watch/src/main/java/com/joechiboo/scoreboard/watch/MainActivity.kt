@@ -1,12 +1,15 @@
 package com.joechiboo.scoreboard.watch
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -38,14 +41,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import kotlin.math.abs
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-private const val TAG = "ScoreWatch"
 private const val POLL_INTERVAL_MS = 2_000L
 private const val RESET_CONFIRM_MS = 3_000L
 private const val MODE_ZONE_RATIO = 0.38f // 畫面上方這個比例內是切換模式，要涵蓋模式按鈕
@@ -53,14 +52,26 @@ private val BUTTON_COLOR = Color(0xFF2E2E2E)
 private val ACCENT = Color(0xFFF97316)
 
 class MainActivity : ComponentActivity() {
-    private var board by mutableStateOf<Scoreboard?>(null)
-    private var loaded by mutableStateOf(false)
-    private var offline by mutableStateOf(false)
     private var confirmingReset by mutableStateOf(false)
     private var resetTimeout: Job? = null
 
+    // 藍牙權限：拒絕也沒關係，手錶照常計分、照常走網路同步，只是平板收不到藍牙比分
+    private val askBluetooth = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (hasBluetoothPermission()) BleScoreService.start(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ScoreStore.init(this)
+        if (!hasBluetoothPermission()) {
+            askBluetooth.launch(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_ADVERTISE,
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.POST_NOTIFICATIONS, // 前景服務的常駐通知；不給也能跑
+                ),
+            )
+        }
         // 下鍵拿來歸零：系統還是會另外送返回，不攔的話每按一次 App 就被移到背景。
         // 離開 App 改用右滑或上鍵。
         onBackPressedDispatcher.addCallback(this) {}
@@ -69,7 +80,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     while (true) {
-                        refresh()
+                        ScoreStore.sync()
                         delay(POLL_INTERVAL_MS)
                     }
                 }
@@ -77,16 +88,31 @@ class MainActivity : ComponentActivity() {
 
             MaterialTheme {
                 ScoreScreen(
-                    board = board,
-                    loaded = loaded,
-                    offline = offline,
+                    board = ScoreStore.board,
+                    loaded = ScoreStore.loaded,
+                    offline = ScoreStore.offline,
+                    unsynced = ScoreStore.unsynced,
+                    linkStatus = BleScoreService.status,
                     confirmingReset = confirmingReset,
-                    onToggleMode = ::toggleMode,
+                    onToggleMode = { feedback(ScoreStore.toggleMode()) },
                     onTap = ::tap,
                     onSwipe = ::score,
                 )
             }
         }
+    }
+
+    // 每次回到畫面都確認藍牙服務還在：它閒置太久會自己收工
+    override fun onStart() {
+        super.onStart()
+        ScoreStore.touch()
+        if (hasBluetoothPermission()) BleScoreService.start(this)
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < 31) return true
+        return checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     }
 
     // 下鍵歸零。上鍵是電源鍵（KEYCODE_POWER），系統先攔走，App 收不到。
@@ -98,31 +124,23 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
-    private fun toggleMode() {
-        val current = board ?: return
-        write { ScoreApi.setHalfCourt(current.gameId, !current.halfCourt) }
-    }
-
     private fun tap(team: String) {
-        score(team, board?.pointsPerPress ?: return)
+        score(team, ScoreStore.board?.pointsPerPress ?: return)
     }
 
     private fun score(team: String, points: Int) {
-        val current = board ?: return
-        // 和網頁相同：分數不減到負的
-        if ((if (team == "A") current.scoreA else current.scoreB) + points < 0) return
-        write { ScoreApi.addScore(current.gameId, team, points) }
+        feedback(ScoreStore.score(team, points))
     }
 
     // 下鍵容易誤按，第一下只提示，時限內再按一次才執行
     private fun pressReset() {
-        val current = board ?: return
+        val current = ScoreStore.board ?: return
         if (current.scoreA == 0 && current.scoreB == 0) return
 
         if (confirmingReset) {
             resetTimeout?.cancel()
             confirmingReset = false
-            write { ScoreApi.newGame(current.teamA, current.teamB) }
+            feedback(ScoreStore.newGame())
         } else {
             confirmingReset = true
             window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -133,32 +151,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun write(action: () -> Unit) {
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) { action() }
-                window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                refresh()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "write failed", e)
-                window.decorView.performHapticFeedback(HapticFeedbackConstants.REJECT)
-                offline = true
-            }
-        }
-    }
-
-    private suspend fun refresh() {
-        try {
-            board = withContext(Dispatchers.IO) { ScoreApi.fetchLive() }
-            loaded = true
-            offline = false
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            offline = true
-        }
+    // 比分存在手錶上，操作當下就生效，不用等網路；沒生效的只有減到負分這種
+    private fun feedback(applied: Boolean) {
+        window.decorView.performHapticFeedback(
+            if (applied) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.REJECT,
+        )
     }
 }
 
@@ -167,6 +164,8 @@ private fun ScoreScreen(
     board: Scoreboard?,
     loaded: Boolean,
     offline: Boolean,
+    unsynced: Int,
+    linkStatus: String,
     confirmingReset: Boolean,
     onToggleMode: () -> Unit,
     onTap: (String) -> Unit,
@@ -230,10 +229,18 @@ private fun ScoreScreen(
             Spacer(Modifier.height(6.dp))
             Text("再按一次歸零", fontSize = 14.sp, color = ACCENT)
         }
-        // 已有比分時斷線：比分留著，但要讓人知道它可能是舊的
-        if (board != null && offline) {
-            Spacer(Modifier.height(6.dp))
-            Text("連線中斷", fontSize = 12.sp, color = ACCENT)
+        // 比分以手錶為準，沒網路也照記。這一行只是讓人知道平板和雲端各自跟上了沒
+        val notes = listOfNotNull(
+            linkStatus.ifEmpty { null },
+            when {
+                unsynced > 0 -> "未上傳 $unsynced"
+                board != null && offline -> "離線"
+                else -> null
+            },
+        )
+        if (notes.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(notes.joinToString("・"), fontSize = 11.sp, color = Color.Gray, maxLines = 1)
         }
     }
 }

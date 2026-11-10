@@ -1,4 +1,5 @@
 import { keepScreenOn } from './wake-lock.js'
+import { createWatchLink, watchSupported } from './watch-ble.js'
 import './style.css'
 import {
   getCurrentGame, getScore, addScore, undoLast, newGame, renameTeams, listGames, subscribe,
@@ -43,6 +44,7 @@ app.innerHTML = `
     <button data-action="new">開新局</button>
     <button data-action="history">紀錄</button>
     <button data-action="mode" data-mode-btn title="切換全場／半場">全場</button>
+    <button data-action="watch" data-watch-btn class="watch" aria-label="用藍牙連接手錶" title="用藍牙連接手錶" hidden>⌚</button>
     <button data-action="help" class="help" aria-label="操作說明">?</button>
   </footer>
   <dialog class="modal" data-help>
@@ -58,6 +60,7 @@ app.innerHTML = `
       <li><b>開新局</b>：選下一場的兩隊，目前這場存進紀錄</li>
       <li><b>紀錄</b>：當天各隊戰績與每場比分，可分享到 LINE</li>
       <li>左下角燈號：<span class="dot online"></span>已連線　<span class="dot"></span>未連線</li>
+      <li><b>⌚</b>（Android 平板才有）：用藍牙直接收手錶的比分，球場沒網路也會跳。手錶先打開計分板，再按 ⌚ 選手錶；亮綠色就是連上了</li>
     </ul>
     <form method="dialog"><button>知道了</button></form>
   </dialog>
@@ -140,9 +143,16 @@ function renderScore({ score_a, score_b }) {
   paint()
 }
 
+// 手錶用藍牙傳來的比分、模式、隊名；沒連著是 null。
+// 連著時畫面以手錶為準：手錶的操作不用等網路，這裡看到的會比 Supabase 新
+let watch = null
+const watchGame = () => (watch?.hasGame ? watch : null)
+const currentMode = () => (watchGame() ? (watch.half ? 'half' : 'full') : modeOf(game))
+const shownScore = (team) => (watchGame() ? watch[team] : server[team] + pending[team])
+
 function paint() {
   for (const team of ['A', 'B']) {
-    const value = String(server[team] + pending[team])
+    const value = String(shownScore(team))
     const el = $('[data-score]', teamEl(team))
     if (el.textContent !== value) {
       el.textContent = value
@@ -155,10 +165,12 @@ function paint() {
 }
 
 function renderNames() {
-  $('[data-name]', teamEl('A')).textContent = game?.team_a_name ?? '—'
-  $('[data-name]', teamEl('B')).textContent = game?.team_b_name ?? '—'
-  $('[data-claim-team="A"]').textContent = game?.team_a_name ?? '—'
-  $('[data-claim-team="B"]').textContent = game?.team_b_name ?? '—'
+  const a = watchGame()?.teamA ?? game?.team_a_name ?? '—'
+  const b = watchGame()?.teamB ?? game?.team_b_name ?? '—'
+  $('[data-name]', teamEl('A')).textContent = a
+  $('[data-name]', teamEl('B')).textContent = b
+  $('[data-claim-team="A"]').textContent = a
+  $('[data-claim-team="B"]').textContent = b
 }
 
 // 半場：App 偵測到的進球先待確認，顯示最舊的一筆讓場邊選隊伍
@@ -174,7 +186,7 @@ function renderClaims(list) {
 }
 
 function renderMode() {
-  const mode = modeOf(game)
+  const mode = currentMode()
   const btn = $('[data-mode-btn]')
   btn.textContent = MODE_LABEL[mode]
   btn.classList.toggle('half', mode === 'half')
@@ -233,12 +245,17 @@ async function loadGame(g) {
   }
   await refresh()
   unsubscribe = subscribe(game.id, {
-    onChange: refresh,
+    onChange: () => {
+      pokeWatch()
+      return refresh()
+    },
     onGameChange: (g) => {
+      pokeWatch()
       if (g?.id !== game?.id) toast('已開新局')
       loadGame(g)
     },
     onGameUpdate: (g) => {
+      pokeWatch()
       if (g?.id !== game?.id) return
       game = g
       renderNames()
@@ -265,6 +282,17 @@ async function run(action) {
 const SWIPE_PX = 40
 
 async function score(team, points) {
+  // 手錶連著時交給手錶記：它才是比分的正本，沒網路也記得住，記完會把新比分傳回來
+  if (watchLink?.connected && watchGame()) {
+    if (watch[team] + points < 0) return
+    try {
+      await watchLink.score(team, points)
+    } catch (err) {
+      console.error(err)
+      toast('手錶沒收到，請再按一次')
+    }
+    return
+  }
   if (!game) return
   if (server[team] + pending[team] + points < 0) return
   pending[team] += points
@@ -294,19 +322,67 @@ for (const el of app.querySelectorAll('[data-team]')) {
     startY = null
     if (dy > SWIPE_PX) score(el.dataset.team, -1)
     else if (dy < -SWIPE_PX) score(el.dataset.team, 1)
-    else if (Math.abs(dy) < 10) score(el.dataset.team, TAP_POINTS[modeOf(game)])
+    else if (Math.abs(dy) < 10) score(el.dataset.team, TAP_POINTS[currentMode()])
   })
   el.addEventListener('pointercancel', () => (startY = null))
+}
+
+// ---------- 手錶藍牙直連 ----------
+
+const watchBtn = $('[data-watch-btn]')
+let watchLink = null
+let pokeTimer
+
+if (watchSupported()) {
+  watchBtn.hidden = false
+  watchLink = createWatchLink({
+    onState: (state) => {
+      watch = state
+      paint()
+      renderNames()
+      renderMode()
+      if (!state) refresh().catch(console.error) // 斷線：退回顯示 Supabase 的比分
+    },
+    onStatus: (status) => {
+      watchBtn.classList.toggle('linked', status === 'connected')
+      watchBtn.classList.toggle('linking', status === 'connecting' || status === 'reconnecting')
+      if (status === 'connected') toast('手錶已連線')
+      else if (status === 'reconnecting') toast('手錶斷線，重新連線中')
+    },
+  })
+}
+
+async function toggleWatch() {
+  if (watchLink.connected) {
+    if (confirm('中斷手錶的藍牙連線？\n比分會改回從網路同步。')) watchLink.stop()
+    return
+  }
+  // 沒連上、或重連一直不成功時，重新選一次手錶
+  try {
+    await watchLink.pick()
+  } catch (err) {
+    console.error(err)
+    if (err?.name !== 'NotFoundError') toast('連不上手錶，確認手錶開著計分板') // NotFoundError：自己按了取消
+  }
+}
+
+// Supabase 那邊有變動（這台或別台改的）：請手錶去拿最新的，不然畫面會停在手錶的舊比分。
+// 手錶自己上傳完也會觸發，它那時多抓一次而已
+function pokeWatch() {
+  if (!watchLink?.connected) return
+  clearTimeout(pokeTimer)
+  pokeTimer = setTimeout(() => watchLink.poke().catch(console.warn), 300)
 }
 
 // ---------- 全場／半場 ----------
 
 async function toggleMode() {
   if (!game) return
-  const next = modeOf(game) === 'full' ? 'half' : 'full'
+  const next = currentMode() === 'full' ? 'half' : 'full'
   try {
     game = await setGameMode(game.id, next)
     renderMode()
+    pokeWatch()
     toast(next === 'half' ? '半場：點一下 +1' : '全場：點一下 +2')
   } catch (err) {
     console.error(err)
@@ -644,6 +720,8 @@ app.addEventListener('click', async (e) => {
     openHistory()
   } else if (btn.dataset.action === 'mode') {
     toggleMode()
+  } else if (btn.dataset.action === 'watch') {
+    toggleWatch()
   } else if (btn.dataset.claimTeam || 'claimSkip' in btn.dataset) {
     const goal = claims[0]
     if (!goal) return

@@ -17,6 +17,9 @@ data class Scoreboard(
     val pointsPerPress: Int get() = if (halfCourt) 1 else 2
 }
 
+/** 伺服器有回應但拒絕了；和連不上不同，重送也不會成功。 */
+class HttpException(val code: Int) : Exception("HTTP $code")
+
 /** 連線資訊和 web/、app/ 相同，是可以公開的金鑰。所有方法都要在背景執行緒呼叫，失敗會丟例外。 */
 object ScoreApi {
     private const val BASE_URL = "https://fyfmhdoluahjvncmgcaq.supabase.co/rest/v1"
@@ -43,26 +46,35 @@ object ScoreApi {
         )
     }
 
-    /** team 是 "A" 或 "B"。 */
-    fun addScore(gameId: String, team: String, points: Int) {
-        post(
-            "score_events",
+    /**
+     * team 是 "A" 或 "B"。clientId 由手錶產生：送出後沒收到回應而重送時，
+     * 資料庫認得是同一筆，不會重複計分（和偵測 App 的做法相同）。
+     */
+    fun addScore(gameId: String, team: String, points: Int, clientId: String) {
+        send(
+            "POST",
+            "score_events?on_conflict=client_id",
             JSONObject()
+                .put("client_id", clientId)
                 .put("game_id", gameId)
                 .put("team", team)
                 .put("points", points)
                 .put("source", "manual"),
+            prefer = "resolution=ignore-duplicates,return=minimal",
         )
     }
 
-    /** 和網頁的開新局相同：目前這場存進紀錄，新的一場比分 0:0，模式沿用。 */
-    fun newGame(teamA: String, teamB: String) {
-        post(
+    /** 和網頁的開新局相同：目前這場存進紀錄，新的一場比分 0:0，模式沿用。回傳新比賽的 id。 */
+    fun newGame(teamA: String, teamB: String): String {
+        val body = send(
+            "POST",
             "rpc/new_game",
             JSONObject()
                 .put("p_team_a_name", teamA)
                 .put("p_team_b_name", teamB),
+            prefer = null,
         )
+        return JSONObject(body).getString("id")
     }
 
     /** 所有裝置一起換；和網頁相同，開新局會沿用。 */
@@ -74,18 +86,17 @@ object ScoreApi {
         )
     }
 
-    private fun post(path: String, body: JSONObject) = send("POST", path, body)
-
-    private fun send(method: String, path: String, body: JSONObject) {
+    private fun send(method: String, path: String, body: JSONObject, prefer: String? = "return=minimal"): String {
         val connection = open(path)
         try {
             connection.requestMethod = method
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Prefer", "return=minimal")
+            if (prefer != null) connection.setRequestProperty("Prefer", prefer)
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = connection.responseCode
-            check(code in 200..299) { "HTTP $code" }
+            if (code !in 200..299) throw HttpException(code)
+            return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()
         }
@@ -95,7 +106,7 @@ object ScoreApi {
         val connection = open(path)
         try {
             val code = connection.responseCode
-            check(code == 200) { "HTTP $code" }
+            if (code != 200) throw HttpException(code)
             return JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         } finally {
             connection.disconnect()

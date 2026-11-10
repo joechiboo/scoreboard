@@ -95,7 +95,11 @@ button {
 }
 button:active { background: var(--btn-active); transform: scale(0.96); }
 .bar [data-mode-btn].half { background: color-mix(in srgb, var(--b) 35%, var(--btn)); }
-.bar .help {
+.bar .watch[hidden] { display: none; }
+.bar .watch.linked { background: #30a46c; }
+.bar .watch.linking { opacity: 0.5; }
+.bar .help,
+.bar .watch {
   flex: none;
   width: 2.6em;
   border-radius: 50%;
