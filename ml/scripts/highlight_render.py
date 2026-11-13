@@ -1,19 +1,24 @@
-"""照 plan.json 剪精華：虛擬鏡頭跟著球、字幕、慢動作重播。
+"""照 clips.json 剪精華：虛擬鏡頭跟著球、字幕、慢動作重播。
 
 用法：
-  python scripts/highlight_render.py datasets/highlights/2026-10-30_half/plan.json --out 精華.mp4
+  # 這場我有參與的球（得分、助攻、其他參與）
+  python scripts/highlight_render.py datasets/highlights/2026-10-30_half/clips.json --player 我 --out 精華_我.mp4
+  # 全收；加 --dry-run 只列出會收哪幾顆
+  python scripts/highlight_render.py datasets/highlights/2026-10-30_half/clips.json --out 精華.mp4
 
-plan.json（不進版控，裡面有球員名字）：
+clips.json（一場一份，不進版控，裡面有球員名字）：
   {
     "videos": "datasets/videos/2026-10-30_half",
     "rim": [1815, 630],
     "clips": [{
       "video": "clip.mp4", "goal": 805.6,
+      "shooter": "乙", "assist": "甲", "involved": [],
       "live": [-7.0, 2.2],
       "captions": [[-3.1, -2.1, "甲 傳球"], [-2.1, 2.2, "乙 跳投命中"]],
       "replay": {"window": [-3.3, -1.3], "x": 2850, "y0": 560, "w": [1700, 1450]}
     }]
   }
+shooter／assist／involved 的意思見 scoreboard_ml/clips.py；不用 --player 時可以省略。
 時間都相對進球秒數。replay 的 x 是鏡頭中心、y0 是上緣、w 是開始到結束的裁切寬度（4K 原圖座標）。
 鏡頭路徑用 highlight_track.py 的追蹤結果，要先對每顆跑過。
 """
@@ -21,6 +26,7 @@ plan.json（不進版控，裡面有球員名字）：
 import argparse
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -29,6 +35,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ML_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ML_ROOT))
+from scoreboard_ml.clips import roles, select_clips  # noqa: E402
+
 OUT_W, OUT_H, FPS = 1920, 1080, 60
 SRC_W, SRC_H = 3840, 2160
 LIVE_W = 2300
@@ -174,10 +183,23 @@ def render_clip(clip: dict, plan: dict, plan_dir: Path, workdir: Path, n: int, f
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("plan", type=Path)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--player", help="只收這個人有參與的球（得分、助攻、其他參與）")
+    parser.add_argument("--dry-run", action="store_true", help="只列出會收哪幾顆，不剪片")
     args = parser.parse_args()
+    if not args.dry_run and args.out is None:
+        parser.error("要給 --out（或加 --dry-run）")
 
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
+    plan["clips"] = select_clips(plan["clips"], args.player)
+    if not plan["clips"]:
+        sys.exit(f"沒有 {args.player} 參與的球")
+    for clip in plan["clips"]:
+        who = f"（{roles(clip)[args.player]}）" if args.player else ""
+        print(f"{clip['video']} @{clip['goal']}{who}：{' / '.join(c[2] for c in clip['captions'])}")
+    if args.dry_run:
+        return
+
     fonts = ImageFont.truetype(FONT_PATH, 52), ImageFont.truetype(FONT_PATH, 34)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:

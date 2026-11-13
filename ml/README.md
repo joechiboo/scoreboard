@@ -46,17 +46,21 @@ python scripts/people_label.py 2026-10-30_half --players 甲,乙,丙
 
 ## 剪精華
 
-對每顆進球追球和人，看對照圖確認誰傳誰投，寫成 `plan.json` 後剪片。誰傳誰投要人工確認，自動判斷不可靠。
+對每顆進球追球和人，看對照圖確認誰傳誰投，記進這場的 `clips.json`。誰傳誰投要人工確認，自動判斷不可靠。
+
+一場只核對一次。之後要剪全場精華或某個人的精華，都是從 `clips.json` 篩出來的，不必重看。
 
 ```bash
 python scripts/highlight_track.py datasets/videos/2026-10-30_half/clip.mp4 805.6
 python scripts/highlight_zoom.py datasets/videos/2026-10-30_half/clip.mp4 805.6 --range=-3.2,-0.5 --out zoom.jpg
-python scripts/highlight_render.py datasets/highlights/2026-10-30_half/plan.json --out 精華.mp4
+
+# 某人有參與的球（得分、助攻、出手沒進被補進之類），加 --dry-run 先看會收哪幾顆
+python scripts/highlight_render.py datasets/highlights/2026-10-30_half/clips.json --player 甲 --out 精華_甲.mp4
 ```
 
 核對時要看到進球前約 0.5 秒：只看到前 1.3 秒，會漏掉最後接球再投的人。
 
-`plan.json` 的格式見 `highlight_render.py` 開頭。計畫、追蹤結果和成品都在 `datasets/highlights/<場次>/`，不進版控。
+`clips.json` 的格式見 `highlight_render.py` 開頭，`shooter`／`assist`／`involved` 的定義見 `scoreboard_ml/clips.py`。進球清單、追蹤結果和成品都在 `datasets/highlights/<場次>/`，不進版控。
 
 ## 轉成 TFLite（給 app/）
 
